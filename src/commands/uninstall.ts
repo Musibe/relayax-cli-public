@@ -10,6 +10,7 @@ import {
 import { uninstallAgent, cleanEmptyParents } from '../lib/installer.js'
 import { isScopedSlug, parseSlug } from '../lib/slug.js'
 import { AI_TOOLS } from '../lib/ai-tools.js'
+import { resolveProjectPath } from '../lib/paths.js'
 
 /**
  * deployed_files에서 에이전트 설정 디렉토리(skillsDir) 기반 boundary를 추론한다.
@@ -33,7 +34,8 @@ export function registerUninstall(program: Command): void {
   program
     .command('uninstall <slug>')
     .description('에이전트 제거')
-    .action((slugInput: string) => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .action((slugInput: string, _opts: { project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const localInstalled = loadInstalled()
       const globalInstalled = loadGlobalInstalled()
@@ -76,7 +78,7 @@ export function registerUninstall(program: Command): void {
           const deployedRemoved = uninstallAgent(localEntry.deployed_files)
           totalRemoved += deployedRemoved.length
           // Clean empty parent directories
-          const boundary = inferBoundary(localEntry.deployed_files, process.cwd())
+          const boundary = inferBoundary(localEntry.deployed_files, resolveProjectPath(_opts.project))
           for (const f of deployedRemoved) {
             cleanEmptyParents(f, boundary)
           }

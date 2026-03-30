@@ -52,10 +52,10 @@ export function detectAgentCLIs(projectPath: string): AITool[] {
  * 홈 디렉토리에서 글로벌 에이전트 CLI 디렉토리를 감지한다.
  * ~/{skillsDir}/ 가 존재하는 CLI를 반환.
  */
-export function detectGlobalCLIs(): AITool[] {
-  const home = os.homedir()
+export function detectGlobalCLIs(home?: string): AITool[] {
+  const homeDir = home ?? os.homedir()
   return AI_TOOLS.filter((tool) =>
-    fs.existsSync(path.join(home, tool.skillsDir))
+    fs.existsSync(path.join(homeDir, tool.skillsDir))
   )
 }
 
@@ -114,7 +114,7 @@ export function scanLocalItems(projectPath: string, tool: AITool): ContentItem[]
 /**
  * 글로벌 홈 디렉토리 소스의 개별 스킬/에이전트/커맨드/룰 항목을 반환한다.
  */
-export function scanGlobalItems(tool: AITool): ContentItem[] {
-  const basePath = path.join(os.homedir(), tool.skillsDir)
+export function scanGlobalItems(tool: AITool, home?: string): ContentItem[] {
+  const basePath = path.join(home ?? os.homedir(), tool.skillsDir)
   return scanItemsIn(basePath)
 }

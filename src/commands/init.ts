@@ -3,6 +3,7 @@ import path from 'path'
 import os from 'os'
 import { Command } from 'commander'
 import { detectAgentCLIs, detectGlobalCLIs, AI_TOOLS } from '../lib/ai-tools.js'
+import { resolveProjectPath } from '../lib/paths.js'
 import {
   createAdapter,
   USER_COMMANDS,
@@ -151,13 +152,14 @@ export function registerInit(program: Command): void {
     .option('--tools <tools>', '설치할 에이전트 CLI 지정 (쉼표 구분)')
     .option('--all', '감지된 모든 에이전트 CLI에 설치')
     .option('--auto', '대화형 프롬프트 없이 자동으로 모든 감지된 CLI에 설치')
-    .action(async (opts: { tools?: string; all?: boolean; auto?: boolean }) => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .action(async (opts: { tools?: string; all?: boolean; auto?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       // auto mode: --auto flag, --all flag, or stdin is not a TTY (but NOT --json alone)
       const autoMode = opts.auto === true || opts.all === true || !process.stdin.isTTY
 
-      const projectPath = process.cwd()
+      const projectPath = resolveProjectPath(opts.project)
       const detected = detectAgentCLIs(projectPath)
       const detectedIds = new Set(detected.map((t) => t.value))
       const isBuilder = isAgentProject(projectPath)

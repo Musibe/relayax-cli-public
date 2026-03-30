@@ -11,6 +11,7 @@ import {
   scanGlobalItems,
   type ContentItem,
 } from '../lib/ai-tools.js'
+import { resolveProjectPath, resolveHome } from '../lib/paths.js'
 
 const SYNC_DIRS = ['skills', 'commands', 'agents', 'rules'] as const
 
@@ -353,9 +354,12 @@ export function registerPackage(program: Command): void {
     .option('--sync', '변경사항을 .relay/에 즉시 반영', false)
     .option('--init', '최초 패키징: 소스 감지 → .relay/ 초기화', false)
     .option('--migrate', '기존 source 필드를 contents로 마이그레이션', false)
-    .action(async (opts: { source?: string; sync?: boolean; init?: boolean; migrate?: boolean }) => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .option('--home <dir>', '홈 디렉토리 경로 (기본: os.homedir(), 환경변수: RELAY_HOME)')
+    .action(async (opts: { source?: string; sync?: boolean; init?: boolean; migrate?: boolean; project?: string; home?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const projectPath = process.cwd()
+      const projectPath = resolveProjectPath(opts.project)
+      const homeDir = resolveHome(opts.home)
       const relayDir = path.join(projectPath, '.relay')
       const relayYamlPath = path.join(relayDir, 'relay.yaml')
 
@@ -363,7 +367,7 @@ export function registerPackage(program: Command): void {
       if (opts.init || !fs.existsSync(relayYamlPath)) {
         // 로컬 + 글로벌 소스를 모두 스캔하여 개별 항목 목록 생성
         const localTools = detectAgentCLIs(projectPath)
-        const globalTools = detectGlobalCLIs()
+        const globalTools = detectGlobalCLIs(homeDir)
 
         interface SourceEntry {
           path: string
@@ -387,7 +391,7 @@ export function registerPackage(program: Command): void {
         }
 
         for (const tool of globalTools) {
-          const items = scanGlobalItems(tool)
+          const items = scanGlobalItems(tool, homeDir)
           if (items.length > 0) {
             sources.push({
               path: `~/${tool.skillsDir}`,
@@ -399,7 +403,7 @@ export function registerPackage(program: Command): void {
         }
 
         // ~/.relay/agents/ 에 기존 에이전트 패키지가 있는지 스캔
-        const globalAgentsDir = path.join(os.homedir(), '.relay', 'agents')
+        const globalAgentsDir = path.join(homeDir ?? os.homedir(), '.relay', 'agents')
         const existingAgents: { slug: string; name: string; version: string; path: string }[] = []
         if (fs.existsSync(globalAgentsDir)) {
           for (const entry of fs.readdirSync(globalAgentsDir, { withFileTypes: true })) {

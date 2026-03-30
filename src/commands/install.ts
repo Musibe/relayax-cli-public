@@ -6,18 +6,19 @@ import type { AgentRegistryInfo } from '../types.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
 import { loadInstalled, saveInstalled, getValidToken } from '../lib/config.js'
 import { resolveSlug } from '../lib/slug.js'
-import { formatContactParts } from '../lib/contact-format.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
 import { hasGlobalUserCommands, installGlobalUserCommands } from './init.js'
+import { resolveProjectPath } from '../lib/paths.js'
 
 export function registerInstall(program: Command): void {
   program
     .command('install <slug>')
     .description('에이전트 패키지를 .relay/agents/에 다운로드합니다')
     .option('--join-code <code>', '초대 코드 (Organization 에이전트 설치 시 자동 가입)')
-    .action(async (slugInput: string, _opts: { joinCode?: string }) => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .action(async (slugInput: string, _opts: { joinCode?: string; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const projectPath = process.cwd()
+      const projectPath = resolveProjectPath(_opts.project)
       const tempDir = makeTempDir()
 
       // Auto-init: 글로벌 커맨드가 없으면 자동 설치
@@ -230,7 +231,6 @@ export function registerInstall(program: Command): void {
           console.log(JSON.stringify(result))
         } else {
           const authorUsername = resolvedAgent.author?.username
-          const authorDisplayName = resolvedAgent.author?.display_name ?? authorUsername ?? ''
           const authorSuffix = authorUsername ? `  \x1b[90mby @${authorUsername}\x1b[0m` : ''
 
           console.log(`\n\x1b[32m✓ ${resolvedAgent.name} 다운로드 완료\x1b[0m  v${resolvedAgent.version}${authorSuffix}`)
@@ -243,24 +243,6 @@ export function registerInstall(program: Command): void {
             }
           }
 
-          // Builder business card
-          const contactParts = formatContactParts(resolvedAgent.author?.contact_links)
-          const hasCard = resolvedAgent.welcome || contactParts.length > 0 || authorUsername
-
-          if (hasCard) {
-            console.log(`\n  \x1b[90m┌─ ${authorDisplayName || authorUsername || '빌더'}의 명함 ${'─'.repeat(Math.max(0, 34 - (authorDisplayName || authorUsername || '빌더').length))}┐\x1b[0m`)
-            if (resolvedAgent.welcome) {
-              const truncated = resolvedAgent.welcome.length > 45 ? resolvedAgent.welcome.slice(0, 45) + '...' : resolvedAgent.welcome
-              console.log(`  \x1b[90m│\x1b[0m  💬 "${truncated}"`)
-            }
-            if (contactParts.length > 0) {
-              console.log(`  \x1b[90m│\x1b[0m  📇 ${contactParts.join('  ')}`)
-            }
-            if (authorUsername) {
-              console.log(`  \x1b[90m│\x1b[0m  👤 relayax.com/@${authorUsername}`)
-            }
-            console.log(`  \x1b[90m└${'─'.repeat(44)}┘\x1b[0m`)
-          }
 
           // Usage hint (type-aware)
           const agentType = resolvedAgent.type

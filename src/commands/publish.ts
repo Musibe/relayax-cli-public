@@ -5,9 +5,9 @@ import os from 'os'
 import yaml from 'js-yaml'
 import { create as tarCreate } from 'tar'
 import { API_URL, getValidToken } from '../lib/config.js'
-import { formatContactParts } from '../lib/contact-format.js'
 import { generatePreamble, generatePreambleBin } from '../lib/preamble.js'
 import { checkCliVersion } from '../lib/version-check.js'
+import { resolveProjectPath } from '../lib/paths.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -439,9 +439,10 @@ export function registerPublish(program: Command): void {
     .option('--token <token>', '인증 토큰')
     .option('--space <slug>', '배포할 Space 지정')
     .option('--version <version>', '배포 버전 지정 (relay.yaml 업데이트)')
-    .action(async (opts: { token?: string; space?: string; version?: string }) => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .action(async (opts: { token?: string; space?: string; version?: string; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const agentDir = process.cwd()
+      const agentDir = resolveProjectPath(opts.project)
       const relayDir = path.join(agentDir, '.relay')
       const relayYamlPath = path.join(relayDir, 'relay.yaml')
       const isTTY = Boolean(process.stdin.isTTY) && !json
@@ -520,7 +521,6 @@ export function registerPublish(program: Command): void {
           ],
         })
 
-        console.error('\n\x1b[2m💡 프로필에 연락처를 설정하면 설치 시 명함이 전달됩니다: www.relayax.com/dashboard/profile\x1b[0m')
         if (visibility === 'private') {
           console.error('\x1b[2m💡 링크 공유 에이전트는 웹 대시보드에서 접근 링크와 구매 안내를 설정하세요: www.relayax.com/dashboard\x1b[0m')
         } else if (visibility === 'internal') {
@@ -772,11 +772,6 @@ export function registerPublish(program: Command): void {
         }
       }
 
-      // Profile hint
-      if (isTTY) {
-        console.error('💡 프로필에 연락처를 설정하면 설치 시 명함이 전달됩니다: www.relayax.com/dashboard/profile')
-      }
-
       const detectedCommands = detectCommands(relayDir)
       const components: Components = {
         agents: countDir(relayDir, 'agents'),
@@ -879,30 +874,6 @@ export function registerPublish(program: Command): void {
           console.log(`\n\x1b[32m✓ ${config.name} 배포 완료\x1b[0m  v${result.version}`)
           console.log(`  슬러그: \x1b[36m${result.slug}\x1b[0m`)
           console.log(`  URL:    \x1b[36m${result.url}\x1b[0m`)
-          // Show business card preview
-          const profile = result.profile
-
-          if (profile) {
-            const contactParts = formatContactParts(profile.contact_links)
-            const welcome = profile.default_welcome ?? ''
-
-            console.log(`\n  \x1b[90m┌─ 설치자에게 보이는 명함 ${'─'.repeat(24)}┐\x1b[0m`)
-            if (welcome) {
-              console.log(`  \x1b[90m│\x1b[0m  💬 "${welcome.length > 45 ? welcome.slice(0, 45) + '...' : welcome}"`)
-            }
-            if (contactParts.length > 0) {
-              console.log(`  \x1b[90m│\x1b[0m  📇 ${contactParts.join('  ')}`)
-            }
-            if (profile.username) {
-              console.log(`  \x1b[90m│\x1b[0m  👤 relayax.com/@${profile.username}`)
-            }
-            if (!welcome && contactParts.length === 0) {
-              console.log(`  \x1b[90m│\x1b[0m  \x1b[2m명함이 비어있습니다\x1b[0m`)
-            }
-            console.log(`  \x1b[90m└${'─'.repeat(44)}┘\x1b[0m`)
-            console.log(`\n  \x1b[90m명함 수정: \x1b[36mwww.relayax.com/dashboard/profile\x1b[0m`)
-          }
-
           // Show shareable onboarding guide as a plain copyable block
           if (isTTY) {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug

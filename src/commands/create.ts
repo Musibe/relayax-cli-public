@@ -9,6 +9,7 @@ import {
 } from '../lib/command-adapter.js'
 import { installGlobalUserCommands, hasGlobalUserCommands } from './init.js'
 import { slugify } from '../lib/slug.js'
+import { resolveProjectPath } from '../lib/paths.js'
 
 const DEFAULT_DIRS = ['.relay/skills', '.relay/commands'] as const
 
@@ -29,9 +30,10 @@ export function registerCreate(program: Command): void {
     .option('--slug <slug>', 'URL용 식별자 (영문 소문자, 숫자, 하이픈)')
     .option('--tags <tags>', '태그 (쉼표 구분)')
     .option('--visibility <visibility>', '공개 범위 (public, private, internal)')
-    .action(async (name: string, opts: { description?: string; slug?: string; tags?: string; visibility?: string }) => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .action(async (name: string, opts: { description?: string; slug?: string; tags?: string; visibility?: string; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const projectPath = process.cwd()
+      const projectPath = resolveProjectPath(opts.project)
       const relayDir = path.join(projectPath, '.relay')
       const relayYamlPath = path.join(relayDir, 'relay.yaml')
       const isTTY = Boolean(process.stdin.isTTY) && !json

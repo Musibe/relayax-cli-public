@@ -68,7 +68,7 @@ export function formatCommandFile(content: CommandContent): string {
 }
 
 // ─── 프롬프트 조각은 cli/src/prompts/*.md에서 관리 (SSOT) ───
-// REQUIREMENTS_CHECK, ERROR_HANDLING_GUIDE, BUSINESS_CARD_FORMAT → import from '../prompts/index.js'
+// REQUIREMENTS_CHECK, ERROR_HANDLING_GUIDE → import from '../prompts/index.js'
 
 // ─── User Commands (글로벌 설치) ───
 

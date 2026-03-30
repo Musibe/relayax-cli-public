@@ -4,7 +4,6 @@ import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../
 import { installAgent } from '../lib/installer.js'
 import { getInstallPath, loadInstalled, saveInstalled, getValidToken } from '../lib/config.js'
 import { resolveSlug, isScopedSlug } from '../lib/slug.js'
-import { formatContactParts } from '../lib/contact-format.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
 
 export function registerUpdate(program: Command): void {
@@ -107,12 +106,6 @@ export function registerUpdate(program: Command): void {
           console.log(`  설치 위치: \x1b[36m${installPath}\x1b[0m`)
           console.log(`  파일 수:   ${files.length}개`)
 
-          // Builder business card
-          const authorUsername = agent.author?.username
-          const authorDisplayName = agent.author?.display_name ?? authorUsername ?? ''
-          const contactParts = formatContactParts(agent.author?.contact_links)
-          const hasCard = agent.welcome || contactParts.length > 0 || authorUsername
-
           // Show changelog for this version
           try {
             const versions = await fetchAgentVersions(slug)
@@ -128,20 +121,6 @@ export function registerUpdate(program: Command): void {
             // Non-critical: skip changelog display
           }
 
-          if (hasCard) {
-            console.log(`\n  \x1b[90m┌─ ${authorDisplayName || '빌더'}의 명함 ${'─'.repeat(Math.max(0, 34 - (authorDisplayName || '빌더').length))}┐\x1b[0m`)
-            if (agent.welcome) {
-              const truncated = agent.welcome.length > 45 ? agent.welcome.slice(0, 45) + '...' : agent.welcome
-              console.log(`  \x1b[90m│\x1b[0m  💬 "${truncated}"`)
-            }
-            if (contactParts.length > 0) {
-              console.log(`  \x1b[90m│\x1b[0m  📇 ${contactParts.join('  ')}`)
-            }
-            if (authorUsername) {
-              console.log(`  \x1b[90m│\x1b[0m  👤 relayax.com/@${authorUsername}`)
-            }
-            console.log(`  \x1b[90m└${'─'.repeat(44)}┘\x1b[0m`)
-          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

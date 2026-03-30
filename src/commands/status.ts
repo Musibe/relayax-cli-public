@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { Command } from 'commander'
 import { detectAgentCLIs } from '../lib/ai-tools.js'
+import { resolveProjectPath } from '../lib/paths.js'
 import { getValidToken, API_URL } from '../lib/config.js'
 import {
   USER_COMMANDS,
@@ -32,9 +33,10 @@ export function registerStatus(program: Command): void {
   program
     .command('status')
     .description('현재 relay 환경 상태를 표시합니다')
-    .action(async () => {
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .action(async (opts: { project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const projectPath = process.cwd()
+      const projectPath = resolveProjectPath(opts.project)
 
       // 1. 로그인 상태
       const token = await getValidToken()

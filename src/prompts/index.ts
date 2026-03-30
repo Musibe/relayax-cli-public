@@ -12,14 +12,12 @@ function interpolate(template: string, vars: Record<string, string>): string {
 // ─── 공유 조각 ───
 export const REQUIREMENTS_CHECK = readPrompt('_requirements-check.md')
 export const ERROR_HANDLING_GUIDE = readPrompt('_error-handling.md')
-export const BUSINESS_CARD_FORMAT = readPrompt('_business-card.md')
 export const SETUP_CLI = readPrompt('_setup-cli.md')
 export const SETUP_LOGIN = readPrompt('_setup-login.md')
 
 const fragments: Record<string, string> = {
   REQUIREMENTS_CHECK,
   ERROR_HANDLING_GUIDE,
-  BUSINESS_CARD_FORMAT,
 }
 
 // ─── 전체 프롬프트 (조각 합성 완료) ───
