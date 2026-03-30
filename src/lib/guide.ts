@@ -99,8 +99,13 @@ ${commands.map((cmd) => `- \`/${cmd.name}\`: ${cmd.description}`).join('\n')}
 
 > ${config.description}
 
-이 가이드는 [RelayAX](https://relayax.com)에서 자동 생성되었습니다.
-아래 단계를 순서대로 실행하면 에이전트가 설치됩니다.
+이 가이드는 터미널(bash) 명령어를 실행할 수 있는 AI 에이전트가 읽고 실행하는 문서입니다.
+터미널을 실행할 수 없는 환경이라면, 아래 도구 중 하나에서 이 가이드 URL을 다시 열어주세요:
+- Claude Code (claude.ai/code)
+- Claude Cowork (claude.ai)
+- Codex (OpenAI)
+- Cursor
+- Antigravity
 
 ${setupSection}
 
