@@ -17,3 +17,10 @@ mkdir -p ~/.npm-global && npm config set prefix '~/.npm-global'
 echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc && source ~/.zshrc
 npm install -g relayax-cli
 ```
+
+이미 설치되어 있다면 최신 버전으로 업데이트하고 init을 재실행합니다:
+
+```bash
+npm update -g relayax-cli
+relay init
+```
