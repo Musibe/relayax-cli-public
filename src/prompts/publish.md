@@ -484,7 +484,9 @@ https://relayax.com/api/registry/{owner}/{slug}/guide.md
 - **private (personal)**: agent 접근 코드 사용. 코드를 사용하면 **이 에이전트에만** 접근 가능.
 - `{owner}`과 `{slug}`는 배포된 에이전트의 실제 슬러그에서 추출합니다 (`@owner/slug` → `owner`, `slug`).
 - "이 블록을 동료에게 공유하면 AI 에이전트가 환경 체크부터 설치까지 자동으로 해줍니다"라고 안내합니다.
-- CLI가 이미 설치된 사용자를 위한 짧은 버전도 코드 블록으로 함께 표시: `/relay-install <slug>`
+- relay CLI가 이미 설치된 사용자를 위한 짧은 버전도 코드 블록으로 함께 표시합니다:
+  - access_code가 있으면: `/relay-install <slug> --code <access_code>`
+  - access_code가 없으면: `/relay-install <slug>`
 
 ## 예시
 

@@ -10,13 +10,13 @@ Organization이 없으면 새로 생성합니다:
 relay orgs create "조직 이름"
 ```
 
-생성 후 접근 코드를 만들어 멤버를 초대할 수 있습니다:
+생성 후 접근 코드를 만들어 사용자를 초대할 수 있습니다:
 
 ```bash
 relay grant create --org <org-slug>
 ```
 
-접근 코드를 받은 멤버는 아래 명령으로 Organization에 가입합니다:
+접근 코드를 받은 사용자는 아래 명령으로 Organization에 가입합니다:
 
 ```bash
 relay grant use --code <접근코드>

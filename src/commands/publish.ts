@@ -903,21 +903,13 @@ export function registerPublish(program: Command): void {
             console.log(guideUrl)
             console.log('```')
 
-            console.log(`\n  \x1b[90m이미 relay를 쓰는 사용자는 이렇게만 하면 됩니다:\x1b[0m\n`)
+            const installCmd = accessCode
+              ? `/relay-install ${result.slug} --code ${accessCode}`
+              : `/relay-install ${result.slug}`
+            console.log(`\n  \x1b[90mrelay CLI 사용자용:\x1b[0m\n`)
             console.log('```')
-            console.log(`/relay-install ${result.slug}`)
+            console.log(installCmd)
             console.log('```')
-
-            if (config.visibility === 'private') {
-              console.log(`\n  \x1b[90mprivate 에이전트:\x1b[0m`)
-              console.log(`  접근 링크를 생성한 뒤 guide.md?code={agent_code}로 공유하세요.`)
-              console.log(`  접근 링크 관리: \x1b[36mrelayax.com/dashboard/agent-access/${config.slug}\x1b[0m`)
-            } else if (config.visibility !== 'internal') {
-              console.log(`\n  \x1b[90m유료 판매하려면:\x1b[0m`)
-              console.log(`  1. 가시성을 "private"로 변경: \x1b[36mrelayax.com/dashboard\x1b[0m`)
-              console.log(`  2. API 키 발급: \x1b[36mrelayax.com/dashboard/keys\x1b[0m`)
-              console.log(`  3. 웹훅 연동 가이드: \x1b[36mrelayax.com/docs/webhook-guide.md\x1b[0m`)
-            }
 
             console.log(`\n  \x1b[90m상세페이지: \x1b[36mrelayax.com/@${detailSlug}\x1b[0m`)
           }
