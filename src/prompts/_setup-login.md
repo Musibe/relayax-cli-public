@@ -4,8 +4,8 @@
 
 먼저 로그인 상태를 확인합니다. 이미 로그인되어 있으면 이 단계를 건너뛰세요.
 
-- 환경 A: `relay whoami`
-- 환경 B: `npx relayax-cli whoami`
+- 환경 A: `relay status`
+- 환경 B: `npx relayax-cli status`
 
 로그인이 필요하면 **반드시 아래 bash 명령어를 실행**하세요.
 

@@ -16,17 +16,49 @@ npm install -g relayax-cli 2>/dev/null && echo "install-ok" || echo "sandbox"
 ```
 
 - `install-ok` → **환경 A (터미널)** (`relay init` 실행 후 Step 1로)
-- `sandbox` → **환경 B (샌드박스)** — `npx relayax-cli`로 실행
+- `sandbox` → **환경 B (샌드박스)** — 아래 MCP 설정으로 진행
+
+### 환경 B: MCP Connector 자동 설정 (샌드박스)
+
+샌드박스 환경(Cowork 등)에서는 네트워크가 제한되어 CLI로 직접 API 호출이 불가합니다.
+대신 relay MCP 서버를 설정하면, 호스트 머신에서 API를 호출할 수 있습니다.
+
+**relay MCP tool(`relay_status` 등)을 사용할 수 있는지 확인하세요.**
+사용할 수 있다면 MCP가 이미 설정되어 있으므로 바로 Step 1로 진행합니다.
+
+사용할 수 없다면 아래 절차로 MCP를 설정합니다:
+
+1. Claude Desktop 설정 파일을 찾아 읽습니다:
+```bash
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null || echo "{}"
+```
+
+2. 설정 파일에 아래 relay MCP 서버를 추가합니다 (기존 mcpServers가 있으면 거기에 추가, 없으면 새로 생성):
+```json
+{
+  "mcpServers": {
+    "relay": {
+      "command": "npx",
+      "args": ["relayax-cli", "mcp"]
+    }
+  }
+}
+```
+
+3. 사용자에게 **Claude Desktop을 재시작**해달라고 안내합니다.
+
+4. 재시작 후 `relay_status` MCP tool이 사용 가능한지 확인합니다. 사용 가능하면 Step 1로 진행합니다.
 
 ### 환경별 실행 방법
 
 이후 가이드의 모든 `relay <명령어>`는 감지된 환경에 따라 실행합니다:
 
-| 가이드 지시 | A. 터미널 | B. 샌드박스 |
+| 가이드 지시 | A. 터미널 | B. 샌드박스 (MCP) |
 |---|---|---|
-| "relay whoami" | `relay whoami` | `npx relayax-cli whoami` |
-| "relay install X" | `relay install X` | `npx relayax-cli install X` |
-| "relay publish" | `relay publish` | `npx relayax-cli publish` |
-| "relay login" | `relay login` | `npx relayax-cli login --device` |
+| "relay status" | `relay status` | `relay_status` tool 호출 |
+| "relay install X" | `relay install X` | `relay_install` tool 호출 (`slug: "X"`) |
+| "relay publish" | `relay publish` | `relay_publish` tool 호출 |
+| "relay login" | `relay login` | 사용자에게 터미널에서 `npx relayax-cli login --device` 안내 |
+| "relay scan" | `relay package --init` | `relay_scan` tool 호출 |
 
 처음 판별한 환경을 이후 계속 사용합니다.

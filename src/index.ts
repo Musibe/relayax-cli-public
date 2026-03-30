@@ -24,6 +24,7 @@ import { registerAccess } from './commands/access.js'
 import { registerGrant } from './commands/grant.js'
 import { registerVersions } from './commands/versions.js'
 import { registerDiff } from './commands/diff.js'
+import { startMcpServer } from './mcp/server.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../package.json') as { version: string }
@@ -59,5 +60,12 @@ registerAccess(program)
 registerGrant(program)
 registerVersions(program)
 registerDiff(program)
+
+program
+  .command('mcp')
+  .description('MCP 서버 모드로 실행합니다 (stdio transport)')
+  .action(async () => {
+    await startMcpServer()
+  })
 
 program.parse()
