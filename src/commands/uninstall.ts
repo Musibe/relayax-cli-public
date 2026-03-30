@@ -9,6 +9,25 @@ import {
 } from '../lib/config.js'
 import { uninstallAgent, cleanEmptyParents } from '../lib/installer.js'
 import { isScopedSlug, parseSlug } from '../lib/slug.js'
+import { AI_TOOLS } from '../lib/ai-tools.js'
+
+/**
+ * deployed_files에서 에이전트 설정 디렉토리(skillsDir) 기반 boundary를 추론한다.
+ * 예: deployed_files에 '~/.cursor/commands/relay/x.md'가 있으면 boundary는 basePath/.cursor
+ */
+function inferBoundary(deployedFiles: string[], basePath: string): string {
+  const skillsDirs = AI_TOOLS.map((t) => t.skillsDir)
+  for (const f of deployedFiles) {
+    for (const sd of skillsDirs) {
+      const prefix = path.join(basePath, sd)
+      if (f.startsWith(prefix)) {
+        return prefix
+      }
+    }
+  }
+  // fallback: 첫 번째 파일의 상위 디렉토리 중 basePath 직속 디렉토리
+  return path.join(basePath, '.claude')
+}
 
 export function registerUninstall(program: Command): void {
   program
@@ -57,7 +76,7 @@ export function registerUninstall(program: Command): void {
           const deployedRemoved = uninstallAgent(localEntry.deployed_files)
           totalRemoved += deployedRemoved.length
           // Clean empty parent directories
-          const boundary = path.join(process.cwd(), '.claude')
+          const boundary = inferBoundary(localEntry.deployed_files, process.cwd())
           for (const f of deployedRemoved) {
             cleanEmptyParents(f, boundary)
           }
@@ -80,7 +99,7 @@ export function registerUninstall(program: Command): void {
           const deployedRemoved = uninstallAgent(globalEntry.deployed_files)
           totalRemoved += deployedRemoved.length
           // Clean empty parent directories
-          const boundary = path.join(os.homedir(), '.claude')
+          const boundary = inferBoundary(globalEntry.deployed_files, os.homedir())
           for (const f of deployedRemoved) {
             cleanEmptyParents(f, boundary)
           }

@@ -1,5 +1,9 @@
 현재 디렉토리의 에이전트(.relay/)를 분석하고, 보안 점검 및 requirements를 구성한 뒤, 사용가이드를 생성하고 relay에 배포합니다.
 
+> **에이전트 호환성**: 이 프롬프트는 다양한 AI 에이전트에서 실행됩니다.
+> 사용자에게 질문할 때는 사용 가능한 사용자 질문 도구를 호출하세요 (AskUserQuestion, ask_user, AskQuestion 등).
+> 반드시 도구를 호출하여 응답을 기다려야 합니다. 텍스트로만 질문하고 세션을 종료하면 안 됩니다.
+
 ## 사전 준비
 
 ### 0-1. 인증 확인
@@ -69,7 +73,7 @@
 
 **기존 글로벌 에이전트가 있을 때:**
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "기존 에이전트를 발견했습니다. 어떤 작업을 할까요?"
 - options: `["<name> (v<version>) — 재배포", ..., "새 에이전트 만들기"]`
 - 재배포 선택 시 → B. 재배포 플로우로 이동 (해당 에이전트의 relay.yaml 경로 사용)
@@ -80,7 +84,7 @@
 `sources[]`의 모든 항목을 사용자에게 표시하고, 패키지에 포함할 콘텐츠를 선택받습니다.
 각 항목의 SKILL.md, 에이전트 파일 등의 **내용을 직접 읽어** 기능을 파악한 후 설명과 함께 표시합니다.
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "배포할 콘텐츠를 선택하세요"
 - options: 모든 소스의 항목을 기능 설명과 함께 나열
 - 예: `["code-review — 코드 리뷰 자동화 (로컬)", "qa-testing — QA 테스트 (글로벌)", "dev-lead — 개발 리드 에이전트 (글로벌)", "전체 선택"]`
@@ -115,20 +119,20 @@
 - **이름(name)**: 마켓플레이스에 표시되는 이름. 한국어 등 자유로운 문자 사용 가능 (예: "콘텐츠 에이전트", "Supabase 웹 개발")
 - **slug**: URL과 `relay install`에 사용되는 식별자. 영문 소문자, 숫자, 하이픈만 가능 (예: "content-agent", "supabase-web-dev")
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "에이전트 이름을 확인해주세요 (한국어 가능)"
 - 분석된 포지셔닝에서 자연스러운 에이전트 이름을 제안합니다 (예: "콘텐츠 에이전트", "Supabase 웹 개발")
 - 현재 디렉토리명이 아닌, **콘텐츠 기반** 이름을 기본값으로 제시합니다.
 
 **한국어 이름은 자동으로 로마자 slug가 생성됩니다.** 자동 생성된 slug를 확인합니다:
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "Slug를 확인해주세요 (URL/설치용 영문 식별자)"
 - 한국어 이름은 로마자 변환 slug를 기본값으로 제시합니다 (예: "콘텐츠 에이전트" → "kontencheu-eijenteu").
 - 로마자 변환이 길거나 부자연스러우면 콘텐츠 기반 영문 slug를 대안으로 제안합니다 (예: "content-agent").
 - 영문 이름이면 자동 slug를 그대로 사용하고 이 단계를 건너뜁니다.
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "에이전트 설명을 확인해주세요 (마켓플레이스에 표시됩니다)"
 - 분석한 콘텐츠를 기반으로 설치자 관점의 설명을 제안합니다.
 - 좋은 예: "Supabase 기반 웹앱의 DB 마이그레이션, API 개발, 테스트를 자동화합니다"
@@ -208,13 +212,13 @@ relay.yaml에 기존 `source` 필드만 있고 `contents`가 없으면:
   유지: qa-testing (skill)
 ```
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "변경된 콘텐츠를 반영할까요?"
 - options: `["반영", "변경 확인", "건너뛰기"]`
 
 **응답 처리:**
 - "반영" → `relay package --sync --json` 실행하여 동기화
-- "변경 확인" → 변경된 파일의 내용을 직접 읽어 diff를 상세히 보여준 후 다시 AskUserQuestion
+- "변경 확인" → 변경된 파일의 내용을 직접 읽어 diff를 상세히 보여준 후 다시 사용자 질문 도구 호출
 - "건너뛰기" → 현재 .relay/ 그대로 배포
 
 **변경이 없으면** → "✓ 모든 콘텐츠가 동기화 상태입니다." 표시 후 다음 단계로
@@ -228,7 +232,7 @@ relay.yaml에 기존 `source` 필드만 있고 `contents`가 없으면:
 
 새로 발견된 항목의 파일 내용을 직접 읽어 기능을 파악한 후 표시합니다:
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "새로 발견된 콘텐츠가 있습니다. 패키지에 추가할까요?"
 - options: 각 항목을 기능 설명과 함께 나열 + "건너뛰기"
 - 예: `["new-skill — 새 유틸리티 스킬", "건너뛰기"]`
@@ -243,13 +247,13 @@ relay.yaml에 기존 `source` 필드만 있고 `contents`가 없으면:
 
 ## 인터랙션 플로우
 
-이 커맨드는 4단계 인터랙션으로 진행됩니다. 각 단계에서 반드시 AskUserQuestion 도구를 사용하세요.
+이 커맨드는 4단계 인터랙션으로 진행됩니다. 각 단계에서 반드시 사용자 질문 도구를 호출하세요.
 
 ### Step 1. 버전 범프
 
 relay.yaml의 현재 `version`을 읽고 semver 범프를 제안합니다.
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "버전을 올릴까요? (현재 v{version})"
 - options: `["v{patch} — patch (버그 수정)", "v{minor} — minor (기능 추가)", "v{major} — major (큰 변경)", "v{version} — 유지"]`
 
@@ -265,7 +269,7 @@ relay.yaml의 `visibility` 설정을 확인합니다.
 
 #### 신규 배포 (visibility 미설정)
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "공개 범위를 선택하세요"
 - options: `["공개 — 누구나 설치", "링크 공유 — 접근 링크가 있는 사람만 설치", "비공개 — Org 멤버만"]`
 
@@ -275,7 +279,7 @@ relay.yaml의 `visibility` 설정을 확인합니다.
 - "비공개" → `relay orgs list --json` 실행 후 Organization 목록 표시
   - Org가 0개이면: "비공개 배포하려면 Organization이 필요합니다. www.relayax.com/orgs 에서 Organization을 생성하세요."라고 안내하고 중단합니다.
 
-  **AskUserQuestion 호출 (Org가 1개여도 반드시 호출):**
+  **사용자 질문 도구 호출 (Org가 1개여도 반드시 호출):**
   - question: "어떤 Organization에 배포할까요?"
   - options: `["<org1_name>", "<org2_name>", ...]`
   - **중요: Org가 1개라도 자동 선택하지 말고 반드시 사용자에게 확인받으세요.**
@@ -286,7 +290,7 @@ relay.yaml의 `visibility` 설정을 확인합니다.
 
 현재 설정을 확인합니다:
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: 공개일 때 "현재 **공개** 설정입니다. 유지할까요?", 링크공유일 때 "현재 **링크 공유** 설정입니다. 접근 링크가 있는 사람만 설치 가능합니다. 유지할까요?", 비공개일 때 "현재 **비공개** 설정입니다 (Org: {name}). 유지할까요?"
 - options: `["유지", "변경"]`
 
@@ -325,7 +329,7 @@ npm: sharp (필수)
 MCP: supabase (선택)
 ```
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "requires 설정이 맞나요?"
 - options: `["확인", "수정"]`
 
@@ -386,7 +390,7 @@ Skills: 3개, Commands: 5개
 requires: env 2개, cli 1개
 ```
 
-**AskUserQuestion 호출:**
+**사용자 질문 도구 호출:**
 - question: "이대로 배포할까요?"
 - options: `["배포", "취소"]`
 
@@ -423,7 +427,7 @@ https://relayax.com/api/registry/{owner}/{slug}/guide.md
 - **private (org)**: agent 접근 코드 사용. 코드를 사용하면 **이 에이전트에만** 접근 가능 + org 자동 가입.
 - **private (personal)**: agent 접근 코드 사용. 코드를 사용하면 **이 에이전트에만** 접근 가능.
 - `{owner}`과 `{slug}`는 배포된 에이전트의 실제 슬러그에서 추출합니다 (`@owner/slug` → `owner`, `slug`).
-- "이 블록을 동료에게 공유하면 Claude가 환경 체크부터 설치까지 자동으로 해줍니다"라고 안내합니다.
+- "이 블록을 동료에게 공유하면 AI 에이전트가 환경 체크부터 설치까지 자동으로 해줍니다"라고 안내합니다.
 - CLI가 이미 설치된 사용자를 위한 짧은 버전도 함께 표시: `/relay:relay-install <slug>`
 {{BUSINESS_CARD_FORMAT}}
 
@@ -431,13 +435,13 @@ https://relayax.com/api/registry/{owner}/{slug}/guide.md
 
 사용자: /relay-publish
 → 인증 확인 ✓, 에이전트 구조 분석 (skills 3개, commands 5개)
-→ AskUserQuestion: "어디에 배포할까요?" → ["공개", "링크 공유", "비공개 (Org 전용)"]
+→ 사용자 질문 도구: "어디에 배포할까요?" → ["공개", "링크 공유", "비공개 (Org 전용)"]
 → "공개" 선택
 → 보안 스캔 ✓ 시크릿 없음 → requires 분석 결과 표시
-→ AskUserQuestion: "requires 설정이 맞나요?" → ["확인", "수정"]
+→ 사용자 질문 도구: "requires 설정이 맞나요?" → ["확인", "수정"]
 → "확인"
 → 배포 요약 표시
-→ AskUserQuestion: "이대로 배포할까요?" → ["배포", "취소"]
+→ 사용자 질문 도구: "이대로 배포할까요?" → ["배포", "취소"]
 → "배포" → relay publish 실행
 → "배포 완료! URL: https://relayax.com/@my-org/my-agent"
 → 온보딩 가이드 코드블록 표시

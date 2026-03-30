@@ -30,18 +30,19 @@ export function createAdapter(tool: AITool): ToolCommandAdapter {
 }
 
 /**
- * 글로벌 슬래시 커맨드 파일 경로 (Claude Code 기본).
- * ~/.claude/commands/relay/{id}.md
+ * @deprecated getGlobalCommandPathForTool(skillsDir, commandId)를 사용하세요.
+ * Claude Code 전용 경로. 멀티 에이전트 지원 시 ForTool 버전 사용 필요.
  */
 export function getGlobalCommandPath(commandId: string): string {
-  return path.join(os.homedir(), '.claude', 'commands', 'relay', `${commandId}.md`)
+  return getGlobalCommandPathForTool('.claude', commandId)
 }
 
 /**
- * 글로벌 슬래시 커맨드 디렉토리 (Claude Code 기본).
+ * @deprecated getGlobalCommandDirForTool(skillsDir)를 사용하세요.
+ * Claude Code 전용 경로. 멀티 에이전트 지원 시 ForTool 버전 사용 필요.
  */
 export function getGlobalCommandDir(): string {
-  return path.join(os.homedir(), '.claude', 'commands', 'relay')
+  return getGlobalCommandDirForTool('.claude')
 }
 
 /**
@@ -176,7 +177,7 @@ ${ERROR_HANDLING_GUIDE}
 1. \`relay uninstall <@author/slug> --json\` 명령어를 실행합니다.
 2. CLI가 자동으로 처리하는 것:
    - \`.relay/agents/\` 패키지 삭제
-   - \`deployed_files\`에 기록된 배치 파일 삭제 (\`~/.claude/\` 또는 \`.claude/\`)
+   - \`deployed_files\`에 기록된 배치 파일 삭제 (에이전트 설정 디렉토리 내)
    - 빈 상위 디렉토리 정리
    - installed.json에서 항목 제거 (글로벌/로컬 양쪽)
 3. 삭제 결과를 보여줍니다 (에이전트 이름, 제거된 파일 수).

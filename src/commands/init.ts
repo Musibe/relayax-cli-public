@@ -86,10 +86,8 @@ export function installGlobalUserCommands(): { installed: boolean; commands: str
   const commands: string[] = []
   const tools: string[] = []
 
-  // 감지된 CLI가 없으면 Claude Code에만 설치 (기본)
-  const targetDirs = globalCLIs.length > 0
-    ? globalCLIs.map((t) => ({ name: t.name, dir: getGlobalCommandDirForTool(t.skillsDir), getPath: (id: string) => getGlobalCommandPathForTool(t.skillsDir, id) }))
-    : [{ name: 'Claude Code', dir: getGlobalCommandDir(), getPath: (id: string) => getGlobalCommandPath(id) }]
+  // 감지된 CLI가 없으면 설치하지 않음 (사용자가 --tools로 지정하거나 CLI를 먼저 설치해야 함)
+  const targetDirs = globalCLIs.map((t) => ({ name: t.name, dir: getGlobalCommandDirForTool(t.skillsDir), getPath: (id: string) => getGlobalCommandPathForTool(t.skillsDir, id) }))
 
   for (const target of targetDirs) {
     fs.mkdirSync(target.dir, { recursive: true })
@@ -294,7 +292,7 @@ export function registerInit(program: Command): void {
 
         // 글로벌
         {
-          const toolNames = globalTools.length > 0 ? globalTools.join(', ') : 'Claude Code'
+          const toolNames = globalTools.length > 0 ? globalTools.join(', ') : '(감지된 CLI 없음)'
           console.log(`  \x1b[36mUser 커맨드 (글로벌)\x1b[0m — ${globalStatus === 'updated' ? '업데이트됨' : '설치됨'}`)
           console.log(`  감지된 CLI: \x1b[36m${toolNames}\x1b[0m`)
           for (const cmd of USER_COMMANDS) {

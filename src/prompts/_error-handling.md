@@ -12,15 +12,15 @@ CLI 명령 실행 후 JSON 에러가 반환되면 아래 기준에 따라 처리
 | `NOT_INITIALIZED` | `relay init --all --json` 실행 → 원래 명령 재시도 |
 | `FETCH_FAILED` | 3초 대기 후 원래 명령 재시도 (최대 2회). 2회 실패 시 사용자에게 안내 |
 
-#### 2. 사용자에게 선택지 제시 (AskUserQuestion)
+#### 2. 사용자에게 선택지 제시 (사용자 질문 도구)
 `options` 필드가 있는 에러:
 
 | 에러 코드 | 행동 |
 |-----------|------|
-| `MISSING_VISIBILITY` | options의 label을 선택지로 AskUserQuestion 호출 |
+| `MISSING_VISIBILITY` | options의 label을 선택지로 사용자 질문 도구 호출 |
 | `MISSING_FIELD` | fix 안내 + 사용자에게 값 입력 요청 |
-| `MISSING_TOOLS` | options의 감지된 도구 목록을 선택지로 AskUserQuestion 호출 |
-| `MISSING_SPACE` | options의 Space 목록을 선택지로 AskUserQuestion 호출 |
+| `MISSING_TOOLS` | options의 감지된 도구 목록을 선택지로 사용자 질문 도구 호출 |
+| `MISSING_SPACE` | options의 Space 목록을 선택지로 사용자 질문 도구 호출 |
 
 사용자가 선택하면, 선택된 값을 CLI 플래그에 반영하여 명령을 재호출합니다.
 
@@ -29,8 +29,8 @@ CLI 명령 실행 후 JSON 에러가 반환되면 아래 기준에 따라 처리
 
 | 에러 코드 | 행동 |
 |-----------|------|
-| `GATED_ACCESS_REQUIRED` | purchase_info의 message/url 표시 → "접근 코드가 있으신가요?" AskUserQuestion |
-| `SPACE_ONLY` | Space 가입 필요 안내 → "초대 코드가 있으신가요?" AskUserQuestion |
+| `GATED_ACCESS_REQUIRED` | purchase_info의 message/url 표시 → "접근 코드가 있으신가요?" 사용자 질문 도구 호출 |
+| `SPACE_ONLY` | Space 가입 필요 안내 → "초대 코드가 있으신가요?" 사용자 질문 도구 호출 |
 | `APPROVAL_REQUIRED` | 승인 대기 안내 |
 | `NO_ACCESS` | 접근 방법 안내 |
 

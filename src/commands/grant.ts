@@ -133,7 +133,7 @@ export function registerGrant(program: Command): void {
         const result = await useAccessCode(opts.code)
 
         if (json) {
-          console.log(JSON.stringify({ status: 'ok', ...result }))
+          console.log(JSON.stringify({ ...result, status: 'ok' }))
         } else {
           if (result.type === 'org') {
             console.log(`\x1b[32m✅ Organization에 가입했습니다 (역할: ${result.role ?? 'member'})\x1b[0m`)

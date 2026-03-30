@@ -906,7 +906,7 @@ export function registerPublish(program: Command): void {
           // Show shareable onboarding guide as a plain copyable block
           if (isTTY) {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
-            const accessCode = (result as Record<string, unknown>).access_code as string | null
+            const accessCode = (result as unknown as Record<string, unknown>).access_code as string | null
             const guideUrl = accessCode
               ? `https://relayax.com/api/registry/${detailSlug}/guide.md?code=${accessCode}`
               : `https://relayax.com/api/registry/${detailSlug}/guide.md`
