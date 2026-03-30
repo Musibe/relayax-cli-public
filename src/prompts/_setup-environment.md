@@ -39,7 +39,7 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null
   "mcpServers": {
     "relay": {
       "command": "npx",
-      "args": ["relayax-cli", "mcp"]
+      "args": ["relayax-cli@latest", "mcp"]
     }
   }
 }

@@ -46,6 +46,33 @@ function jsonText(obj: unknown) {
   return { type: 'text' as const, text: JSON.stringify(obj) }
 }
 
+// 주요 도구 응답에 CLI 업데이트 경고를 병합하는 헬퍼
+// MCP 서버 프로세스는 Claude 재시작 전까지 유지되므로, 응답에 버전 정보를 포함시켜
+// 에이전트가 사용자에게 재시작을 안내할 수 있도록 한다.
+let _cachedCliUpdate: { latest: string } | null | undefined
+async function getCliUpdateWarning(): Promise<Record<string, unknown> | null> {
+  if (_cachedCliUpdate === undefined) {
+    try {
+      const { checkCliVersion } = await import('../lib/version-check.js')
+      _cachedCliUpdate = await checkCliVersion(true)
+    } catch {
+      _cachedCliUpdate = null
+    }
+  }
+  if (!_cachedCliUpdate) return null
+  return {
+    cli_update: {
+      current: pkg.version,
+      latest: _cachedCliUpdate.latest,
+      message: `relay v${_cachedCliUpdate.latest}이 있습니다. npm update -g relayax-cli 후 Claude를 재시작해주세요.`,
+    },
+  }
+}
+
+function jsonTextWithUpdate(obj: Record<string, unknown>, update: Record<string, unknown> | null) {
+  return jsonText(update ? { ...obj, ...update } : obj)
+}
+
 // ─── Server ───
 
 export function createMcpServer(): McpServer {
@@ -100,7 +127,8 @@ export function createMcpServer(): McpServer {
         await reportInstall(agent.id, fullSlug, agent.version)
         sendUsagePing(agent.id, fullSlug, agent.version)
 
-        return { content: [jsonText({ status: 'ok', agent: agent.name, slug: fullSlug, version: agent.version, files: countFiles(agentDir), install_path: agentDir })] }
+        const cliUpdate = await getCliUpdateWarning()
+        return { content: [jsonTextWithUpdate({ status: 'ok', agent: agent.name, slug: fullSlug, version: agent.version, files: countFiles(agentDir), install_path: agentDir }, cliUpdate)] }
       } finally {
         removeTempDir(tempDir)
       }
@@ -278,7 +306,8 @@ export function createMcpServer(): McpServer {
         }
 
         const result = await publishToApi(token, tarPath, metadata)
-        return { content: [jsonText(result)] }
+        const cliUpdate = await getCliUpdateWarning()
+        return { content: [jsonTextWithUpdate(result as unknown as Record<string, unknown>, cliUpdate)] }
       } finally {
         fs.unlinkSync(tarPath)
       }
