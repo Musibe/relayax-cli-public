@@ -19,16 +19,16 @@ const pkg = require('../../package.json') as { version: string }
 
 // ─── Helpers ───
 
-async function resolveUsername(token: string): Promise<string | undefined> {
+async function resolveUserInfo(token: string): Promise<{ username?: string; email?: string }> {
   try {
     const res = await fetch(`${API_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) return undefined
-    const body = await res.json() as { username?: string }
-    return body.username
+    if (!res.ok) return {}
+    const body = await res.json() as { username?: string; email?: string }
+    return { username: body.username, email: body.email }
   } catch {
-    return undefined
+    return {}
   }
 }
 
@@ -210,7 +210,12 @@ export function createMcpServer(): McpServer {
     const projectPath = resolveMcpProjectPath(project_path)
     const token = await getValidToken()
     let username: string | undefined
-    if (token) username = await resolveUsername(token)
+    let email: string | undefined
+    if (token) {
+      const info = await resolveUserInfo(token)
+      username = info.username
+      email = info.email
+    }
 
     const detected = detectAgentCLIs(projectPath)
     const mounted = detectMountedCLIs()
@@ -229,7 +234,7 @@ export function createMcpServer(): McpServer {
 
     return { content: [jsonText({
       cli: { version: pkg.version, update_available: cliUpdate ? cliUpdate.latest : null },
-      login: { authenticated: !!token, username },
+      login: { authenticated: !!token, username, email },
       agent_clis: detected.map((t) => t.name),
       mounted_paths: mounted.map((m) => m.basePath),
       project,
@@ -650,8 +655,8 @@ export function createMcpServer(): McpServer {
       // 이미 로그인되어 있는지 확인
       const existingToken = await getValidToken()
       if (existingToken) {
-        const username = await resolveUsername(existingToken)
-        return { content: [jsonText({ status: 'already_authenticated', username })] }
+        const { username, email } = await resolveUserInfo(existingToken)
+        return { content: [jsonText({ status: 'already_authenticated', username, email })] }
       }
 
       // Device code 발급
@@ -689,8 +694,8 @@ export function createMcpServer(): McpServer {
             refresh_token: data.refresh_token,
             expires_at: data.expires_at ? Number(data.expires_at) : undefined,
           })
-          const username = await resolveUsername(data.token)
-          return { content: [jsonText({ status: 'ok', message: '로그인 완료', username })] }
+          const { username, email } = await resolveUserInfo(data.token)
+          return { content: [jsonText({ status: 'ok', message: '로그인 완료', username, email })] }
         }
       }
 

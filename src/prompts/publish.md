@@ -291,7 +291,11 @@ Organization 목록을 조회합니다:
   - question: "Organization이 없습니다. 비공개 배포를 하려면 Organization이 필요합니다. Organization을 만들까요?"
   - options: `["Organization 생성", "Organization 없이 계속 (공개/링크공유만 가능)"]`
 - "Organization 생성" 선택 시:
-  - **사용자 질문 도구 호출:** question: "Organization 이름을 입력하세요."
+  - 로그인 정보(username, email)를 기반으로 Organization 이름을 추천합니다:
+    - 업무용 이메일(커스텀 도메인)이면 → 도메인에서 회사명 추출하여 추천. 예: `haemin@relayax.com` → "relayax"
+    - 비업무용 이메일(gmail.com, naver.com, kakao.com, daum.net, hotmail.com, outlook.com, yahoo.com, icloud.com 등 무료 메일)이면 → username을 추천. 예: `haemin` → "haemin"
+    - email이 없으면 → username을 추천
+  - **사용자 질문 도구 호출:** question: "Organization 이름을 입력하세요. (추천: {추천이름})"
   - 환경 A: `relay orgs create "이름" --json` 실행
   - 환경 B: `relay_org_create` MCP tool 호출
   - 생성 후 org 목록을 갱신합니다.
