@@ -128,6 +128,67 @@ async function loginWithBrowser(json: boolean): Promise<LoginResult> {
   return waitForToken(port)
 }
 
+async function loginWithDevice(json: boolean): Promise<LoginResult> {
+  const res = await fetch(`${API_URL}/api/auth/device/request`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error('Device code 발급에 실패했습니다')
+  }
+
+  const { device_code, user_code, verification_url, expires_in } = await res.json() as {
+    device_code: string
+    user_code: string
+    verification_url: string
+    expires_in: number
+  }
+
+  if (json) {
+    console.error(JSON.stringify({ status: 'waiting', verification_url, user_code, expires_in }))
+  } else {
+    console.error(`\n아래 URL에서 코드를 입력하세요:\n`)
+    console.error(`  ${verification_url}`)
+    console.error(`\n  코드: \x1b[1m${user_code}\x1b[0m\n`)
+  }
+
+  openBrowser(`${verification_url}?user_code=${user_code}`)
+
+  const deadline = Date.now() + expires_in * 1000
+
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5000))
+
+    const pollRes = await fetch(`${API_URL}/api/auth/device/poll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_code }),
+    })
+
+    if (!pollRes.ok) continue
+
+    const data = await pollRes.json() as {
+      status: string
+      token?: string
+      refresh_token?: string
+      expires_at?: string
+    }
+
+    if (data.status === 'approved' && data.token) {
+      return {
+        token: data.token,
+        refresh_token: data.refresh_token,
+        expires_at: data.expires_at ? Number(data.expires_at) : undefined,
+      }
+    }
+
+    if (data.status === 'expired') {
+      throw new Error('코드가 만료되었습니다. 다시 시도하세요.')
+    }
+
+    // pending — continue polling
+  }
+
+  throw new Error('로그인 시간이 초과되었습니다 (5분)')
+}
+
 /**
  * 대화형 로그인 플로우 실행 (auto-login에서 호출).
  * 브라우저에서 로그인 페이지를 열고 토큰을 받아 저장.
@@ -149,7 +210,8 @@ export function registerLogin(program: Command): void {
     .command('login')
     .description('RelayAX 계정에 로그인합니다')
     .option('--token <token>', '직접 토큰 입력 (브라우저 없이)')
-    .action(async (opts: { token?: string }) => {
+    .option('--device', 'Device code 방식으로 로그인 (샌드박스/원격 환경용)')
+    .action(async (opts: { token?: string; device?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       ensureGlobalRelayDir()
@@ -159,8 +221,9 @@ export function registerLogin(program: Command): void {
       let expiresAt: number | undefined
 
       if (!accessToken) {
+        const loginFn = opts.device ? loginWithDevice : loginWithBrowser
         try {
-          const loginResult = await loginWithBrowser(json)
+          const loginResult = await loginFn(json)
 
           accessToken = loginResult.token
           refreshToken = loginResult.refresh_token
@@ -168,9 +231,12 @@ export function registerLogin(program: Command): void {
         } catch (err) {
           const msg = err instanceof Error ? err.message : '로그인 실패'
           if (json) {
-            console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: '브라우저에서 로그인을 완료하고 relay login을 재시도하세요.' }))
+            console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: opts.device ? '다시 시도하세요.' : 'relay login --device를 시도하세요.' }))
           } else {
             console.error(`\x1b[31m오류: ${msg}\x1b[0m`)
+            if (!opts.device) {
+              console.error(`\n\x1b[33m팁: 브라우저 콜백이 안 되는 환경이라면 relay login --device를 시도하세요.\x1b[0m`)
+            }
           }
           process.exit(1)
         }

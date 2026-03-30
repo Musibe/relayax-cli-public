@@ -99,13 +99,11 @@ ${commands.map((cmd) => `- \`/${cmd.name}\`: ${cmd.description}`).join('\n')}
 
 > ${config.description}
 
-이 가이드는 터미널(bash) 명령어를 실행할 수 있는 AI 에이전트가 읽고 실행하는 문서입니다.
-터미널을 실행할 수 없는 환경이라면, 아래 도구 중 하나에서 이 가이드 URL을 다시 열어주세요:
-- Claude Code (claude.ai/code)
-- Claude Cowork (claude.ai)
-- Codex (OpenAI)
-- Cursor
-- Antigravity
+이 가이드는 Relay 에이전트를 설치하는 절차입니다.
+각 Step의 명령어를 순서대로 실행하세요. 요약하지 말고 바로 Step 1부터 시작하세요.
+
+터미널(bash)을 실행할 수 없는 환경이라면, 아래 도구에서 이 URL을 열고 실행하세요:
+Claude Code · Claude Cowork · Codex · Cursor · Antigravity
 
 ${setupSection}
 
