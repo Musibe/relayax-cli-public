@@ -63,5 +63,10 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null
 | "relay check-update X" | `relay check-update X` | `relay_check_update` tool 호출 (`slug: "X"`) |
 | "relay orgs list" | `relay orgs list --json` | `relay_org_list` tool 호출 |
 | "relay orgs create" | `relay orgs create "이름" --json` | `relay_org_create` tool 호출 (`name: "이름"`) |
+| "relay grant create" | `relay grant create --agent <slug>` | `relay_grant_create` tool 호출 (`agent_slug: "<slug>"`) |
+| "relay grant use" | `relay grant use --code <code>` | `relay_grant_use` tool 호출 (`code: "<code>"`) |
+| "relay access" | `relay access <slug> --code <code>` | `relay_access` tool 호출 (`slug`, `code`) |
+| "relay join" | `relay join <slug> --code <code>` | `relay_join` tool 호출 (`code: "<code>"`) |
+| "relay deploy-record" | `relay deploy-record <slug> --scope <scope> --files ...` | `relay_deploy_record` tool 호출 |
 
 처음 판별한 환경을 이후 계속 사용합니다.

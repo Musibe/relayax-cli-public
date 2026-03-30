@@ -263,45 +263,63 @@ relay.yaml의 현재 `version`을 읽고 semver 범프를 제안합니다.
 - 유지 외 선택 → relay.yaml의 version을 선택된 값으로 업데이트
 - 유지 → 그대로 진행
 
-### Step 1. 공개 범위 선택
+### Step 1. Organization 선택 & 공개 범위 설정
+
+#### 1-1. Organization 확인 (먼저 실행)
+
+Organization 목록을 조회합니다:
+- 환경 A: `relay orgs list --json` 실행
+- 환경 B: `relay_org_list` MCP tool 호출
+
+**Org가 0개이면:**
+- **사용자 질문 도구 호출:**
+  - question: "Organization이 없습니다. 비공개 배포를 하려면 Organization이 필요합니다. Organization을 만들까요?"
+  - options: `["Organization 생성", "Organization 없이 계속 (공개/링크공유만 가능)"]`
+- "Organization 생성" 선택 시:
+  - **사용자 질문 도구 호출:** question: "Organization 이름을 입력하세요."
+  - 환경 A: `relay orgs create "이름" --json` 실행
+  - 환경 B: `relay_org_create` MCP tool 호출
+  - 생성 후 org 목록을 갱신합니다.
+
+**Org가 1개 이상이면:**
+
+**사용자 질문 도구 호출 (Org가 1개여도 반드시 호출):**
+- question: "어떤 Organization에 배포할까요?"
+- options: `["<org1_name> (<org1_slug>)", "<org2_name> (<org2_slug>)", ..., "Organization 없이 배포 (공개/링크공유)"]`
+- **중요: Org가 1개라도 자동 선택하지 말고 반드시 사용자에게 확인받으세요.**
+
+**응답 처리:**
+- Org 선택 → relay.yaml에 `org: <selected_slug>` 저장, 1-2단계로
+- "Organization 없이 배포" → org 없이 1-2단계로 (비공개 옵션 제외)
+
+#### 1-2. 공개 범위 선택
 
 relay.yaml의 `visibility` 설정을 확인합니다.
 
-#### 신규 배포 (visibility 미설정)
+**신규 배포 (visibility 미설정):**
 
-**사용자 질문 도구 호출:**
-- question: "공개 범위를 선택하세요"
-- options: `["공개 — 누구나 설치", "링크 공유 — 접근 링크가 있는 사람만 설치", "비공개 — Org 멤버만"]`
+Org가 선택된 경우:
+- **사용자 질문 도구 호출:**
+  - question: "공개 범위를 선택하세요"
+  - options: `["공개 — 누구나 설치", "링크 공유 — 접근 링크가 있는 사람만 설치", "비공개 — Org 멤버만"]`
+
+Org가 없는 경우:
+- **사용자 질문 도구 호출:**
+  - question: "공개 범위를 선택하세요"
+  - options: `["공개 — 누구나 설치", "링크 공유 — 접근 링크가 있는 사람만 설치"]`
 
 **응답 처리:**
 - "공개" → relay.yaml에 `visibility: public` 저장
 - "링크 공유" → relay.yaml에 `visibility: private` 저장. 배포 후 웹 대시보드(/dashboard)에서 접근 링크를 생성하고 구매 안내를 설정할 수 있다고 안내.
-- "비공개" → Organization 목록을 조회합니다:
-  - 환경 A: `relay orgs list --json` 실행
-  - 환경 B: `relay_status` tool 응답을 참고하거나, 배포 시 `relay_publish` tool이 org 선택 없이 배포하면 서버가 자동 매칭합니다.
-  - Org가 0개이면: Organization을 생성합니다.
-    - 환경 A: `relay orgs create "이름" --json` 실행
-    - 환경 B: `relay_org_create` MCP tool 호출 (tool이 없으면 사용자에게 "www.relayax.com/orgs 에서 Organization을 생성하세요"라고 안내)
-    - **사용자 질문 도구 호출:**
-      - question: "비공개 배포를 위해 Organization을 만들어야 합니다. Organization 이름을 입력하세요."
-    - 생성 후 해당 org를 선택하여 계속 진행합니다.
+- "비공개" → relay.yaml에 `visibility: internal`, `org: <selected_slug>` 저장
 
-  **사용자 질문 도구 호출 (Org가 1개여도 반드시 호출):**
-  - question: "어떤 Organization에 배포할까요?"
-  - options: `["<org1_name>", "<org2_name>", ...]`
-  - **중요: Org가 1개라도 자동 선택하지 말고 반드시 사용자에게 확인받으세요.**
-
-  → relay.yaml에 `visibility: internal`, `org: <selected_slug>` 저장
-
-#### 재배포 (visibility 이미 설정됨)
-
-현재 설정을 확인합니다:
+**재배포 (visibility 이미 설정됨):**
 
 **사용자 질문 도구 호출:**
 - question: 공개일 때 "현재 **공개** 설정입니다. 유지할까요?", 링크공유일 때 "현재 **링크 공유** 설정입니다. 접근 링크가 있는 사람만 설치 가능합니다. 유지할까요?", 비공개일 때 "현재 **비공개** 설정입니다 (Org: {name}). 유지할까요?"
 - options: `["유지", "변경"]`
 
-"변경" → 신규 배포와 동일한 플로우
+"변경" → 1-1부터 다시 진행
 
 ### Step 2. 보안 점검 & requires 확인
 

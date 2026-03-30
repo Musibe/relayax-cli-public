@@ -14,7 +14,6 @@ import { registerLogin } from './commands/login.js'
 import { registerUpdate } from './commands/update.js'
 import { registerOutdated } from './commands/outdated.js'
 import { registerCheckUpdate } from './commands/check-update.js'
-import { registerFollow } from './commands/follow.js'
 import { registerChangelog } from './commands/changelog.js'
 import { registerJoin } from './commands/join.js'
 import { registerOrgs } from './commands/orgs.js'
@@ -51,7 +50,6 @@ registerLogin(program)
 registerUpdate(program)
 registerOutdated(program)
 registerCheckUpdate(program)
-registerFollow(program)
 registerChangelog(program)
 registerJoin(program)
 registerOrgs(program)

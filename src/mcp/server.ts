@@ -73,6 +73,17 @@ function jsonTextWithUpdate(obj: Record<string, unknown>, update: Record<string,
   return jsonText(update ? { ...obj, ...update } : obj)
 }
 
+// MCP 서버는 Claude Desktop이 spawn하므로 cwd가 / 등 예측 불가한 경로일 수 있다.
+// project_path가 없을 때 cwd 대신 홈 디렉토리를 fallback으로 사용한다.
+import os from 'os'
+function resolveMcpProjectPath(projectPath?: string): string {
+  if (projectPath) return projectPath
+  const resolved = resolveProjectPath()
+  // cwd가 / 또는 비정상적이면 홈 디렉토리 사용
+  if (resolved === '/' || resolved === '') return os.homedir()
+  return resolved
+}
+
 // ─── Server ───
 
 export function createMcpServer(): McpServer {
@@ -97,10 +108,10 @@ export function createMcpServer(): McpServer {
 
   server.tool('relay_install', '에이전트를 설치합니다', {
     slug: z.string().describe('에이전트 slug (예: @owner/name)'),
-    project_path: z.string().optional().describe('프로젝트 경로 (기본: cwd)'),
+    project_path: z.string().optional().describe('프로젝트 경로 (기본: 홈 디렉토리)'),
   }, async ({ slug: slugInput, project_path }) => {
     try {
-      const projectPath = project_path ?? resolveProjectPath()
+      const projectPath = resolveMcpProjectPath(project_path)
       const token = await getValidToken()
       const parsed = await resolveSlug(slugInput)
       const fullSlug = parsed.full
@@ -127,8 +138,27 @@ export function createMcpServer(): McpServer {
         await reportInstall(agent.id, fullSlug, agent.version)
         sendUsagePing(agent.id, fullSlug, agent.version)
 
+        // relay.yaml에서 tags, requires 읽기 (scope 판단용)
+        let agentTags: string[] = []
+        let agentRequires: unknown = null
+        let hasRules = false
+        try {
+          const relayYamlPath = path.join(agentDir, 'relay.yaml')
+          if (fs.existsSync(relayYamlPath)) {
+            const cfg = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
+            agentTags = (cfg.tags as string[]) ?? []
+            agentRequires = cfg.requires ?? null
+          }
+          hasRules = fs.existsSync(path.join(agentDir, 'rules')) && fs.readdirSync(path.join(agentDir, 'rules')).length > 0
+        } catch { /* non-critical */ }
+
         const cliUpdate = await getCliUpdateWarning()
-        return { content: [jsonTextWithUpdate({ status: 'ok', agent: agent.name, slug: fullSlug, version: agent.version, files: countFiles(agentDir), install_path: agentDir }, cliUpdate)] }
+        return { content: [jsonTextWithUpdate({
+          status: 'ok', agent: agent.name, slug: fullSlug, version: agent.version,
+          description: agent.description ?? '', tags: agentTags, requires: agentRequires, has_rules: hasRules,
+          files: countFiles(agentDir), install_path: agentDir,
+          scope_hint: '설치 후 에이전트 성격에 따라 글로벌/로컬 배치를 사용자에게 물어보세요. tags에 특정 프레임워크가 있거나 rules/가 있으면 로컬 추천, 범용이면 글로벌 추천.',
+        }, cliUpdate)] }
       } finally {
         removeTempDir(tempDir)
       }
@@ -177,7 +207,7 @@ export function createMcpServer(): McpServer {
   server.tool('relay_status', '현재 relay 환경 상태를 표시합니다', {
     project_path: z.string().optional().describe('프로젝트 경로'),
   }, async ({ project_path }) => {
-    const projectPath = project_path ?? resolveProjectPath()
+    const projectPath = resolveMcpProjectPath(project_path)
     const token = await getValidToken()
     let username: string | undefined
     if (token) username = await resolveUsername(token)
@@ -242,7 +272,7 @@ export function createMcpServer(): McpServer {
   server.tool('relay_scan', '배포 가능한 스킬/에이전트/커맨드를 스캔합니다', {
     project_path: z.string().optional().describe('프로젝트 경로'),
   }, async ({ project_path }) => {
-    const projectPath = project_path ?? resolveProjectPath()
+    const projectPath = resolveMcpProjectPath(project_path)
     const homeDir = resolveHome()
 
     interface SourceEntry { path: string; location: string; name: string; items: { name: string; type: string }[] }
@@ -319,7 +349,7 @@ export function createMcpServer(): McpServer {
     project_path: z.string().optional().describe('프로젝트 경로 (.relay/relay.yaml이 있는 디렉토리)'),
   }, async ({ project_path }) => {
     try {
-      const projectPath = project_path ?? resolveProjectPath()
+      const projectPath = resolveMcpProjectPath(project_path)
       const relayDir = path.join(projectPath, '.relay')
       const relayYaml = path.join(relayDir, 'relay.yaml')
 
@@ -358,6 +388,144 @@ export function createMcpServer(): McpServer {
       } finally {
         fs.unlinkSync(tarPath)
       }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
+  // ═══ grant / access / join ═══
+
+  server.tool('relay_grant_create', '에이전트 또는 Organization의 접근 코드를 생성합니다', {
+    agent_slug: z.string().optional().describe('에이전트 slug (agent 접근 코드 생성 시)'),
+    org_slug: z.string().optional().describe('Organization slug (org 접근 코드 생성 시)'),
+    max_uses: z.number().optional().describe('최대 사용 횟수'),
+    expires_at: z.string().optional().describe('만료일 (ISO 8601)'),
+  }, async ({ agent_slug, org_slug, max_uses, expires_at }) => {
+    try {
+      if (!agent_slug && !org_slug) {
+        return { content: [jsonText({ error: 'MISSING_OPTION', message: 'agent_slug 또는 org_slug가 필요합니다.' })], isError: true }
+      }
+      const token = await getValidToken()
+      if (!token) return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.' })], isError: true }
+
+      let agentId: string | undefined
+      let orgId: string | undefined
+
+      if (agent_slug) {
+        const res = await fetch(`${API_URL}/api/agents/${agent_slug}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!res.ok) throw new Error('에이전트를 찾을 수 없습니다.')
+        agentId = ((await res.json()) as { id: string }).id
+      }
+      if (org_slug) {
+        const res = await fetch(`${API_URL}/api/orgs/${org_slug}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!res.ok) throw new Error('Organization을 찾을 수 없습니다.')
+        orgId = ((await res.json()) as { id: string }).id
+      }
+
+      const { createAccessCode } = await import('../commands/grant.js')
+      const result = await createAccessCode({
+        type: agentId ? 'agent' : 'org',
+        agent_id: agentId,
+        org_id: orgId,
+        max_uses,
+        expires_at,
+      })
+      return { content: [jsonText({ status: 'created', ...result })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
+  server.tool('relay_grant_use', '접근 코드를 사용하여 org 가입 또는 에이전트 접근 권한을 획득합니다', {
+    code: z.string().describe('접근 코드'),
+  }, async ({ code }) => {
+    try {
+      const { useAccessCode } = await import('../commands/grant.js')
+      const result = await useAccessCode(code)
+      return { content: [jsonText({ ...result, status: 'ok' })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
+  server.tool('relay_access', '접근 코드로 비공개 에이전트 접근 권한을 획득합니다 (설치는 별도로 relay_install 호출 필요)', {
+    slug: z.string().describe('에이전트 slug'),
+    code: z.string().describe('접근 코드'),
+  }, async ({ slug: slugInput, code }) => {
+    try {
+      const token = await getValidToken()
+      if (!token) return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.' })], isError: true }
+
+      const res = await fetch(`${API_URL}/api/agents/${slugInput}/claim-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { message?: string }
+        throw new Error(body.message ?? `접근 권한 획득 실패 (${res.status})`)
+      }
+      const result = await res.json()
+      return { content: [jsonText({ status: 'ok', ...(result as Record<string, unknown>) })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
+  server.tool('relay_join', '초대 코드로 Organization에 가입합니다', {
+    code: z.string().describe('초대 코드 (UUID)'),
+  }, async ({ code }) => {
+    try {
+      const { useAccessCode } = await import('../commands/grant.js')
+      const result = await useAccessCode(code)
+      return { content: [jsonText({ ...result, status: 'ok' })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
+  // ═══ relay_deploy_record — 배치 파일 기록 ═══
+
+  server.tool('relay_deploy_record', '에이전트 파일 배치 정보를 installed.json에 기록합니다', {
+    slug: z.string().describe('에이전트 slug'),
+    scope: z.enum(['global', 'local']).describe('배치 범위 (global 또는 local)'),
+    files: z.array(z.string()).optional().describe('배치된 파일 경로 목록'),
+  }, async ({ slug: slugInput, scope, files }) => {
+    try {
+      const { isScopedSlug, parseSlug } = await import('../lib/slug.js')
+      const localRegistry = loadInstalled()
+      const globalRegistry = loadGlobalInstalled()
+
+      let slug: string
+      if (isScopedSlug(slugInput)) {
+        slug = slugInput
+      } else {
+        const allKeys = [...Object.keys(localRegistry), ...Object.keys(globalRegistry)]
+        const match = allKeys.find((key) => {
+          const parsed = parseSlug(key)
+          return parsed && parsed.name === slugInput
+        })
+        slug = match ?? slugInput
+      }
+
+      const entry = localRegistry[slug] ?? globalRegistry[slug]
+      if (!entry) {
+        return { content: [jsonText({ error: 'NOT_INSTALLED', message: `'${slugInput}'는 설치되어 있지 않습니다.` })], isError: true }
+      }
+
+      entry.deploy_scope = scope
+      entry.deployed_files = files ?? []
+
+      if (scope === 'global') {
+        globalRegistry[slug] = entry
+        saveGlobalInstalled(globalRegistry)
+        if (localRegistry[slug]) { localRegistry[slug] = entry; saveInstalled(localRegistry) }
+      } else {
+        localRegistry[slug] = entry
+        saveInstalled(localRegistry)
+      }
+
+      return { content: [jsonText({ status: 'ok', slug, deploy_scope: scope, deployed_files: (files ?? []).length })] }
     } catch (err) {
       return { content: [jsonText({ error: String(err) })], isError: true }
     }
