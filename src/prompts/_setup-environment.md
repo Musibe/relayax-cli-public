@@ -61,5 +61,7 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null
 | "relay login" | `relay login` | `relay_login` tool 호출 |
 | "relay scan" | `relay package --init` | `relay_scan` tool 호출 |
 | "relay check-update X" | `relay check-update X` | `relay_check_update` tool 호출 (`slug: "X"`) |
+| "relay orgs list" | `relay orgs list --json` | `relay_org_list` tool 호출 |
+| "relay orgs create" | `relay orgs create "이름" --json` | `relay_org_create` tool 호출 (`name: "이름"`) |
 
 처음 판별한 환경을 이후 계속 사용합니다.

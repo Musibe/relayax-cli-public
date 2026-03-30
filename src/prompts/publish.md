@@ -279,7 +279,12 @@ relay.yaml의 `visibility` 설정을 확인합니다.
 - "비공개" → Organization 목록을 조회합니다:
   - 환경 A: `relay orgs list --json` 실행
   - 환경 B: `relay_status` tool 응답을 참고하거나, 배포 시 `relay_publish` tool이 org 선택 없이 배포하면 서버가 자동 매칭합니다.
-  - Org가 0개이면: "비공개 배포하려면 Organization이 필요합니다. www.relayax.com/orgs 에서 Organization을 생성하세요."라고 안내하고 중단합니다.
+  - Org가 0개이면: Organization을 생성합니다.
+    - 환경 A: `relay orgs create "이름" --json` 실행
+    - 환경 B: `relay_org_create` MCP tool 호출 (tool이 없으면 사용자에게 "www.relayax.com/orgs 에서 Organization을 생성하세요"라고 안내)
+    - **사용자 질문 도구 호출:**
+      - question: "비공개 배포를 위해 Organization을 만들어야 합니다. Organization 이름을 입력하세요."
+    - 생성 후 해당 org를 선택하여 계속 진행합니다.
 
   **사용자 질문 도구 호출 (Org가 1개여도 반드시 호출):**
   - question: "어떤 Organization에 배포할까요?"

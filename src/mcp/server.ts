@@ -268,6 +268,53 @@ export function createMcpServer(): McpServer {
     return { content: [jsonText({ sources })] }
   })
 
+  server.tool('relay_org_list', '소속 Organization 목록을 조회합니다', {}, async () => {
+    try {
+      const token = await getValidToken()
+      if (!token) {
+        return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.' })], isError: true }
+      }
+      const { fetchMyOrgs } = await import('../commands/orgs.js')
+      const orgs = await fetchMyOrgs(token)
+      return { content: [jsonText({ orgs: orgs.map((o) => ({ id: o.id, slug: o.slug, name: o.name, role: o.role })) })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
+  server.tool('relay_org_create', '새 Organization을 생성합니다', {
+    name: z.string().describe('Organization 이름'),
+    slug: z.string().optional().describe('URL slug (미지정 시 이름에서 자동 생성)'),
+  }, async ({ name, slug: slugInput }) => {
+    try {
+      const token = await getValidToken()
+      if (!token) {
+        return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.' })], isError: true }
+      }
+      const slug = slugInput ?? name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 50)
+
+      const res = await fetch(`${API_URL}/api/orgs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name, slug }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ message: `${res.status}` })) as { message?: string }
+        throw new Error(body.message ?? `Organization 생성 실패 (${res.status})`)
+      }
+      const org = await res.json() as { slug: string; name: string }
+      return { content: [jsonText({ status: 'created', org })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
   server.tool('relay_publish', '에이전트를 마켓플레이스에 배포합니다 (.relay/ 디렉토리를 tar로 패키징하여 업로드)', {
     project_path: z.string().optional().describe('프로젝트 경로 (.relay/relay.yaml이 있는 디렉토리)'),
   }, async ({ project_path }) => {
