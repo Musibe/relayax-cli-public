@@ -22,22 +22,59 @@
 
 `relay package --init --json` 실행
 - CLI가 프로젝트에서 에이전트 CLI 디렉토리(.claude/, .codex/, .gemini/ 등)를 자동 탐색합니다.
-- JSON 결과의 `detected` 배열에 각 디렉토리별 콘텐츠 요약이 포함됩니다:
+- 동시에 글로벌 스킬 디렉토리(~/.claude/skills/, ~/.codex/skills/ 등)도 스캔합니다.
+- JSON 결과에 로컬 detected와 글로벌 스킬이 모두 포함됩니다:
   ```json
   {
     "status": "init_required",
     "detected": [
       { "source": ".claude", "name": "Claude Code", "summary": { "skills": 2, "commands": 3 }, "fileCount": 8 },
       { "source": ".codex", "name": "Codex", "summary": { "agents": 1 }, "fileCount": 2 }
+    ],
+    "global_skills": [
+      { "path": "~/.claude/skills/code-review", "name": "code-review", "description": "코드 리뷰 자동화" },
+      { "path": "~/.claude/skills/qa-testing", "name": "qa-testing", "description": "QA 테스트 실행" }
     ]
   }
   ```
 
-- **detected가 0개** → "배포 가능한 에이전트 콘텐츠가 없습니다. skills/이나 commands/를 먼저 만들어주세요." 안내 후 중단
+- 아래 4가지 케이스로 분기합니다:
+
+| 로컬 detected | 글로벌 스킬 | 동작 |
+|---|---|---|
+| 있음 | 있음 | 로컬 소스 선택 후, 글로벌 스킬 임포트 여부를 추가로 질문 (1-b단계) |
+| 있음 | 없음 | 기존 플로우 그대로 (1-b단계 건너뜀) |
+| 없음 | 있음 | "프로젝트에 에이전트 콘텐츠가 없지만, 글로벌 스킬 N개를 발견했습니다" → 다중선택 (1-b단계) |
+| 없음 | 없음 | "배포 가능한 에이전트 콘텐츠가 없습니다. skills/이나 commands/를 먼저 만들어주세요." 안내 후 중단 |
+
+##### 1-b단계: 글로벌 스킬 임포트 (global_skills가 있을 때만)
+
+글로벌 스킬의 SKILL.md 파일 **내용을 직접 읽어** 각 스킬이 무엇을 하는지 파악한 후, 사용자에게 다중선택을 제안합니다.
+
+**로컬 콘텐츠가 있을 때:**
+
+**AskUserQuestion 호출:**
+- question: "글로벌 스킬도 함께 배포할까요?"
+- options: 각 스킬을 기능 설명과 함께 나열 + "건너뛰기"
+- 예: `["code-review — 코드 리뷰 자동화", "qa-testing — QA 테스트 실행", "건너뛰기"]`
+- 여러 개 선택 가능하도록 안내합니다. 사용자가 쉼표로 구분하거나 여러 번 응답할 수 있습니다.
+
+**로컬 콘텐츠가 없을 때 (글로벌 스킬만 있는 경우):**
+
+**AskUserQuestion 호출:**
+- question: "프로젝트에 에이전트 콘텐츠가 없지만, 글로벌 스킬 N개를 발견했습니다. 배포할 스킬을 선택하세요"
+- options: 각 스킬을 기능 설명과 함께 나열 + "취소"
+- 최소 1개 이상 선택해야 진행 가능합니다.
+
+**선택된 글로벌 스킬 처리:**
+- 선택된 스킬을 `.relay/skills/<스킬명>/`으로 복사합니다.
+- 복사 후에는 `.relay/` 내에서 독립 관리됩니다 (글로벌 원본과의 링크 없음).
+- 재배포 시 글로벌 스킬을 다시 스캔하지 않습니다. 이미 `.relay/`에 복사된 콘텐츠를 기준으로 동작합니다.
+- relay.yaml의 `source` 필드는 로컬 소스 디렉토리만 추적합니다. 글로벌에서 임포트한 스킬은 source 추적 대상이 아닙니다.
 
 ##### 2단계: 콘텐츠 분석 & 에이전트 포지셔닝
 
-detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일 **내용을 직접 읽어** 에이전트의 정체성을 파악합니다.
+detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일과 **임포트된 글로벌 스킬의 내용을 직접 읽어** 에이전트의 정체성을 파악합니다.
 
 **분석 관점:**
 - 이 에이전트가 **무엇을 하는 에이전트**인지 (코드 리뷰? QA? 문서 생성? 데이터 분석?)
@@ -46,7 +83,7 @@ detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일 **
 
 이 분석을 기반으로 에이전트를 하나의 "제품"으로 포지셔닝합니다.
 
-**중요: 소스 디렉토리 이름(.claude 등)은 인프라 디테일이므로 사용자에게 노출하지 않습니다.**
+**중요: 소스 디렉토리 이름(.claude 등)이나 글로벌/로컬 구분은 인프라 디테일이므로 사용자에게 노출하지 않습니다.**
 사용자에게는 에이전트의 기능과 정체성 중심으로 질문합니다.
 
 ##### 3단계: 배포 제안
@@ -71,14 +108,29 @@ detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일 **
 - options: 콘텐츠 기반 설명 (예: `["Supabase 웹 개발 에이전트 (skills 2개, commands 3개)", "QA 자동화 에이전트 (agents 1개)"]`)
 - 디렉토리 이름은 내부적으로만 매핑하고, 사용자에게는 에이전트의 기능으로 보여줍니다.
 
+**글로벌 스킬만으로 구성된 경우 (로컬 detected 없음):**
+임포트된 스킬들의 내용을 분석하여 에이전트 포지셔닝을 자동 생성합니다. 별도의 소스 선택 없이 바로 4단계로 진행합니다.
+
 ##### 4단계: 에이전트 정보 확정
 
 포지셔닝 분석을 기반으로 에이전트 이름과 설명을 제안합니다.
 
+**이름(name)과 slug는 별개입니다:**
+- **이름(name)**: 마켓플레이스에 표시되는 이름. 한국어 등 자유로운 문자 사용 가능 (예: "콘텐츠 에이전트", "Supabase 웹 개발")
+- **slug**: URL과 `relay install`에 사용되는 식별자. 영문 소문자, 숫자, 하이픈만 가능 (예: "content-agent", "supabase-web-dev")
+
 **AskUserQuestion 호출:**
-- question: "에이전트 이름을 확인해주세요"
-- 분석된 포지셔닝에서 자연스러운 에이전트 이름을 제안합니다 (예: "supabase-web-dev", "code-reviewer")
+- question: "에이전트 이름을 확인해주세요 (한국어 가능)"
+- 분석된 포지셔닝에서 자연스러운 에이전트 이름을 제안합니다 (예: "콘텐츠 에이전트", "Supabase 웹 개발")
 - 현재 디렉토리명이 아닌, **콘텐츠 기반** 이름을 기본값으로 제시합니다.
+
+**한국어 이름은 자동으로 로마자 slug가 생성됩니다.** 자동 생성된 slug를 확인합니다:
+
+**AskUserQuestion 호출:**
+- question: "Slug를 확인해주세요 (URL/설치용 영문 식별자)"
+- 한국어 이름은 로마자 변환 slug를 기본값으로 제시합니다 (예: "콘텐츠 에이전트" → "kontencheu-eijenteu").
+- 로마자 변환이 길거나 부자연스러우면 콘텐츠 기반 영문 slug를 대안으로 제안합니다 (예: "content-agent").
+- 영문 이름이면 자동 slug를 그대로 사용하고 이 단계를 건너뜁니다.
 
 **AskUserQuestion 호출:**
 - question: "에이전트 설명을 확인해주세요 (마켓플레이스에 표시됩니다)"
@@ -91,14 +143,15 @@ detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일 **
 자동 처리:
 - `.relay/relay.yaml` 생성:
   ```yaml
-  name: <확정된 이름>
-  slug: <이름에서 자동 생성 — 소문자, 특수문자→하이픈>
+  name: <확정된 이름>  # 한국어 가능 (예: "콘텐츠 에이전트")
+  slug: <확정된 slug>  # 영문만 (예: "content-agent")
   description: <확정된 설명>
-  source: <선택된 소스 디렉토리> # 예: .claude (내부용)
+  source: <선택된 소스 디렉토리> # 예: .claude (내부용, 로컬 소스가 있을 때만)
   version: 1.0.0
   tags: []
   ```
-- `relay package --source <선택된 소스> --sync --json` 실행하여 콘텐츠를 .relay/로 복사
+- 로컬 소스가 있으면: `relay package --source <선택된 소스> --sync --json` 실행하여 콘텐츠를 .relay/로 복사
+- 글로벌 스킬만으로 구성된 경우: 1-b단계에서 이미 `.relay/skills/`로 복사 완료. source 필드는 생략하고, relay.yaml에 패키징 동기화 대상 없이 `.relay/` 직접 편집 모드로 동작합니다.
 - `relay init --auto` 실행하여 글로벌 커맨드 설치 보장
 - 결과를 사용자에게 표시
 

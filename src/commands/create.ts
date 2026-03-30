@@ -8,6 +8,7 @@ import {
   BUILDER_COMMANDS,
 } from '../lib/command-adapter.js'
 import { installGlobalUserCommands, hasGlobalUserCommands } from './init.js'
+import { slugify } from '../lib/slug.js'
 
 const DEFAULT_DIRS = ['.relay/skills', '.relay/commands'] as const
 
@@ -25,9 +26,10 @@ export function registerCreate(program: Command): void {
     .command('create <name>')
     .description('새 에이전트 프로젝트를 생성합니다')
     .option('--description <desc>', '에이전트 설명')
+    .option('--slug <slug>', 'URL용 식별자 (영문 소문자, 숫자, 하이픈)')
     .option('--tags <tags>', '태그 (쉼표 구분)')
     .option('--visibility <visibility>', '공개 범위 (public, private, internal)')
-    .action(async (name: string, opts: { description?: string; tags?: string; visibility?: string }) => {
+    .action(async (name: string, opts: { description?: string; slug?: string; tags?: string; visibility?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = process.cwd()
       const relayDir = path.join(projectPath, '.relay')
@@ -45,13 +47,22 @@ export function registerCreate(program: Command): void {
       }
 
       // 2. 메타데이터 수집
-      const defaultSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      let slug = opts.slug ?? slugify(name)
 
       let description = opts.description ?? ''
       let tags: string[] = opts.tags ? opts.tags.split(',').map((t) => t.trim()).filter(Boolean) : []
       let visibility: 'public' | 'private' | 'internal' = (opts.visibility as 'public' | 'private' | 'internal') ?? 'public'
 
       if (json) {
+        // --json 모드: slug가 비어있으면 에러
+        if (!slug) {
+          console.error(JSON.stringify({
+            error: 'INVALID_SLUG',
+            message: '이름에서 유효한 slug를 생성할 수 없습니다. 영문 이름을 사용하거나 --slug 옵션을 지정하세요.',
+            fix: `relay create "${name}" --slug <영문-slug> --description <설명> --json`,
+          }))
+          process.exit(1)
+        }
         // --json 모드: 필수 값 부족 시 에러 반환 (프롬프트 없음)
         if (!opts.description) {
           console.error(JSON.stringify({
@@ -93,6 +104,20 @@ export function registerCreate(program: Command): void {
 
         console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1mrelay create\x1b[0m — 새 에이전트 프로젝트\n`)
 
+        // slug가 비어있으면 (한국어 등 비ASCII 이름) slug를 직접 입력받음
+        if (!slug) {
+          slug = await promptInput({
+            message: 'Slug (URL/설치에 사용되는 영문 식별자):',
+            validate: (v) => {
+              const trimmed = v.trim()
+              if (!trimmed) return 'slug를 입력해주세요.'
+              if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(trimmed)) return '소문자, 숫자, 하이픈만 사용 가능합니다.'
+              return true
+            },
+          })
+          slug = slug.trim()
+        }
+
         if (!description) {
           description = await promptInput({
             message: '에이전트 설명:',
@@ -124,7 +149,7 @@ export function registerCreate(program: Command): void {
       fs.mkdirSync(relayDir, { recursive: true })
       const yamlData: Record<string, unknown> = {
         name,
-        slug: defaultSlug,
+        slug: slug,
         description,
         version: '1.0.0',
         type: 'hybrid',
@@ -169,7 +194,7 @@ export function registerCreate(program: Command): void {
         console.log(JSON.stringify({
           status: 'ok',
           name,
-          slug: defaultSlug,
+          slug: slug,
           relay_yaml: 'created',
           directories: createdDirs,
           local_commands: localResults,

@@ -3,7 +3,7 @@ import { Command } from 'commander'
 import { execSync } from 'child_process'
 import { ensureGlobalRelayDir, saveTokenData, API_URL } from '../lib/config.js'
 
-function openBrowser(url: string): void {
+function openBrowser(url: string): boolean {
   const platform = process.platform
   try {
     if (platform === 'darwin') {
@@ -13,8 +13,9 @@ function openBrowser(url: string): void {
     } else {
       execSync(`xdg-open "${url}"`, { stdio: 'ignore' })
     }
+    return true
   } catch {
-    // ignore browser open errors
+    return false
   }
 }
 
@@ -113,10 +114,16 @@ async function loginWithBrowser(json: boolean): Promise<LoginResult> {
   const port = await findAvailablePort()
   const loginUrl = `${API_URL}/auth/cli-login?port=${port}`
 
+  const opened = openBrowser(loginUrl)
+
   if (!json) {
-    console.error(`브라우저에서 로그인 페이지를 엽니다...`)
+    if (opened) {
+      console.error(`브라우저에서 로그인 페이지를 엽니다...`)
+    } else {
+      console.error(`브라우저를 자동으로 열 수 없습니다. 아래 URL을 브라우저에서 직접 열어주세요:\n`)
+      console.error(`  ${loginUrl}\n`)
+    }
   }
-  openBrowser(loginUrl)
 
   return waitForToken(port)
 }

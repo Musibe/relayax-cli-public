@@ -9,6 +9,58 @@ export interface ParsedSlug {
 const SCOPED_SLUG_RE = /^@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/
 const SIMPLE_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
+// ── 한글 로마자 변환 (Revised Romanization) ──
+
+const INITIALS = [
+  'g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp',
+  's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h',
+] as const
+
+const MEDIALS = [
+  'a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o',
+  'wa', 'wae', 'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu',
+  'eu', 'ui', 'i',
+] as const
+
+const FINALS = [
+  '', 'k', 'k', 'k', 'n', 'n', 'n', 't', 'l',
+  'l', 'l', 'l', 'l', 'l', 'l', 'l', 'm', 'p',
+  'p', 't', 't', 'ng', 't', 't', 'k', 't', 'p', 't',
+] as const
+
+const HANGUL_BASE = 0xAC00
+
+function romanize(input: string): string {
+  let result = ''
+  for (const ch of input) {
+    const code = ch.codePointAt(0)!
+    if (code >= HANGUL_BASE && code < HANGUL_BASE + 11172) {
+      const offset = code - HANGUL_BASE
+      const initial = Math.floor(offset / (21 * 28))
+      const medial = Math.floor((offset % (21 * 28)) / 28)
+      const final = offset % 28
+      result += INITIALS[initial] + MEDIALS[medial] + FINALS[final]
+    } else {
+      result += ch
+    }
+  }
+  return result
+}
+
+/**
+ * 임의의 문자열을 slug로 변환한다.
+ * 한글은 로마자로 변환된다 (예: "콘텐츠 에이전트" → "kontencheu-eijenteu").
+ */
+export function slugify(input: string): string {
+  return romanize(input)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 50)
+}
+
 /**
  * Scoped slug(`@owner/name`)를 동기적으로 파싱한다.
  * 단순 slug는 파싱할 수 없으므로 null을 반환한다.
