@@ -295,13 +295,20 @@ export function syncContentsToRelay(
 
     const absFrom = resolveFromPath(content.from, projectPath)
     const relaySubPath = deriveRelaySubPath(content)
-    const relayItemDir = path.join(relayDir, relaySubPath)
+    const relayTarget = path.join(relayDir, relaySubPath)
 
-    // 소스 파일을 .relay/로 복사
+    // 단일 파일인 경우 직접 복사 (디렉토리 기반 diff/sync 불필요)
+    if (fs.existsSync(absFrom) && fs.statSync(absFrom).isFile()) {
+      fs.mkdirSync(path.dirname(relayTarget), { recursive: true })
+      fs.copyFileSync(absFrom, relayTarget)
+      continue
+    }
+
+    // 디렉토리인 경우 diff 기반 동기화
     const sourceFiles = scanPath(absFrom)
-    const relayFiles = scanPath(relayItemDir)
+    const relayFiles = scanPath(relayTarget)
     const fileDiff = computeDiff(sourceFiles, relayFiles)
-    syncToRelay(absFrom, relayItemDir, fileDiff)
+    syncToRelay(absFrom, relayTarget, fileDiff)
   }
 }
 
