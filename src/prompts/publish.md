@@ -276,7 +276,9 @@ relay.yaml의 `visibility` 설정을 확인합니다.
 **응답 처리:**
 - "공개" → relay.yaml에 `visibility: public` 저장
 - "링크 공유" → relay.yaml에 `visibility: private` 저장. 배포 후 웹 대시보드(/dashboard)에서 접근 링크를 생성하고 구매 안내를 설정할 수 있다고 안내.
-- "비공개" → `relay orgs list --json` 실행 후 Organization 목록 표시
+- "비공개" → Organization 목록을 조회합니다:
+  - 환경 A: `relay orgs list --json` 실행
+  - 환경 B: `relay_status` tool 응답을 참고하거나, 배포 시 `relay_publish` tool이 org 선택 없이 배포하면 서버가 자동 매칭합니다.
   - Org가 0개이면: "비공개 배포하려면 Organization이 필요합니다. www.relayax.com/orgs 에서 Organization을 생성하세요."라고 안내하고 중단합니다.
 
   **사용자 질문 도구 호출 (Org가 1개여도 반드시 호출):**
@@ -395,7 +397,9 @@ requires: env 2개, cli 1개
 - options: `["배포", "취소"]`
 
 **응답 처리:**
-- "배포" → `relay publish --json` 실행 (슬래시 커맨드에서 이미 버전/visibility를 relay.yaml에 저장했으므로 --json으로 인터랙티브 프롬프트 생략)
+- "배포":
+  - 환경 A: `relay publish --json` 실행 (슬래시 커맨드에서 이미 버전/visibility를 relay.yaml에 저장했으므로 --json으로 인터랙티브 프롬프트 생략)
+  - 환경 B: `relay_publish` MCP tool 호출 (`project_path`는 프로젝트 루트 경로)
 - "취소" → 중단
 
 #### 3-3. 배포 완료 & 온보딩 가이드
