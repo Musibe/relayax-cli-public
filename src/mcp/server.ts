@@ -165,7 +165,32 @@ export function createMcpServer(): McpServer {
       } catch { /* skip */ }
     }
 
-    return { content: [jsonText({ login: { authenticated: !!token, username }, agent_clis: detected.map((t) => t.name), mounted_paths: mounted.map((m) => m.basePath), project })] }
+    // 버전 확인
+    const { checkCliVersion } = await import('../lib/version-check.js')
+    const cliUpdate = await checkCliVersion(true)
+
+    return { content: [jsonText({
+      cli: { version: pkg.version, update_available: cliUpdate ? cliUpdate.latest : null },
+      login: { authenticated: !!token, username },
+      agent_clis: detected.map((t) => t.name),
+      mounted_paths: mounted.map((m) => m.basePath),
+      project,
+    })] }
+  })
+
+  server.tool('relay_check_update', 'CLI 및 에이전트 업데이트를 확인합니다', {}, async () => {
+    const { checkCliVersion, checkAllAgents } = await import('../lib/version-check.js')
+    const cliUpdate = await checkCliVersion(true)
+    const agentUpdates = await checkAllAgents(true)
+
+    const updates = []
+    if (cliUpdate) updates.push({ type: 'cli', current: cliUpdate.current, latest: cliUpdate.latest })
+    for (const u of agentUpdates) updates.push({ type: 'agent', slug: u.slug, current: u.current, latest: u.latest })
+
+    if (updates.length === 0) {
+      return { content: [jsonText({ status: 'up_to_date', message: '모두 최신 버전입니다.', cli_version: pkg.version })] }
+    }
+    return { content: [jsonText({ status: 'updates_available', updates, message: 'CLI를 업데이트하려면: npm update -g relayax-cli' })] }
   })
 
   server.tool('relay_scan', '배포 가능한 스킬/에이전트/커맨드를 스캔합니다', {
