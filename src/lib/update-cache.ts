@@ -8,7 +8,7 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 interface CacheData {
   cli?: string
-  teams?: Record<string, string>
+  agents?: Record<string, string>
 }
 
 function loadCache(): CacheData {
@@ -30,7 +30,7 @@ function saveCache(data: CacheData): void {
 export function isCacheValid(key: 'cli' | string, force?: boolean): boolean {
   if (force) return false
   const cache = loadCache()
-  const timestamp = key === 'cli' ? cache.cli : cache.teams?.[key]
+  const timestamp = key === 'cli' ? cache.cli : cache.agents?.[key]
   if (!timestamp) return false
   return Date.now() - new Date(timestamp).getTime() < CACHE_TTL_MS
 }
@@ -41,8 +41,8 @@ export function updateCacheTimestamp(key: 'cli' | string): void {
   if (key === 'cli') {
     cache.cli = now
   } else {
-    if (!cache.teams) cache.teams = {}
-    cache.teams[key] = now
+    if (!cache.agents) cache.agents = {}
+    cache.agents[key] = now
   }
   saveCache(cache)
 }

@@ -123,7 +123,7 @@ export function registerOrgs(program: Command): void {
           console.log(JSON.stringify({ status: 'created', org }))
         } else {
           console.log(`\x1b[32m✅ Organization "${org.name}" (@${org.slug}) 생성 완료\x1b[0m`)
-          console.log(`\n\x1b[33m  팀 배포: relay publish --org ${org.slug}\x1b[0m`)
+          console.log(`\n\x1b[33m  에이전트 배포: relay publish --org ${org.slug}\x1b[0m`)
           console.log(`\x1b[33m  멤버 초대: www.relayax.com/orgs/${org.slug}/members\x1b[0m`)
         }
       } catch (err) {

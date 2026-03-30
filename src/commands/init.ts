@@ -18,7 +18,7 @@ import { loadInstalled, saveInstalled } from '../lib/config.js'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json') as { version: string }
 
-const VALID_TEAM_DIRS = ['skills', 'agents', 'rules', 'commands'] as const
+const VALID_AGENT_DIRS = ['skills', 'agents', 'rules', 'commands'] as const
 
 function resolveTools(toolsArg: string): string[] {
   const raw = toolsArg.trim().toLowerCase()
@@ -41,14 +41,14 @@ function resolveTools(toolsArg: string): string[] {
 function showWelcome(): void {
   const lines = [
     '',
-    '  \x1b[33m⚡\x1b[0m \x1b[1mrelay\x1b[0m — Agent Team Marketplace',
+    '  \x1b[33m⚡\x1b[0m \x1b[1mrelay\x1b[0m — Agent Marketplace',
     '',
     '  에이전트 CLI에 relay 커맨드를 연결합니다.',
     '',
     '  \x1b[2mUser 커맨드 (글로벌)\x1b[0m',
-    '  /relay-install     팀 탐색 & 설치',
+    '  /relay-install     에이전트 탐색 & 설치',
     '  /relay-status      설치 현황 & Space',
-    '  /relay-uninstall   팀 삭제',
+    '  /relay-uninstall   에이전트 삭제',
     '',
   ]
   console.log(lines.join('\n'))
@@ -128,9 +128,9 @@ export function hasGlobalUserCommands(): boolean {
 }
 
 /**
- * 팀 프로젝트인지 감지한다 (.relay/ 디렉토리 내 relay.yaml 또는 팀 디렉토리 구조).
+ * 에이전트 프로젝트인지 감지한다 (.relay/ 디렉토리 내 relay.yaml 또는 에이전트 디렉토리 구조).
  */
-function isTeamProject(projectPath: string): boolean {
+function isAgentProject(projectPath: string): boolean {
   const relayDir = path.join(projectPath, '.relay')
   if (!fs.existsSync(relayDir)) return false
 
@@ -138,10 +138,10 @@ function isTeamProject(projectPath: string): boolean {
     return true
   }
 
-  return VALID_TEAM_DIRS.some((d) => {
+  return VALID_AGENT_DIRS.some((d) => {
     const dirPath = path.join(relayDir, d)
     if (!fs.existsSync(dirPath)) return false
-    return fs.readdirSync(dirPath).filter((f) => !f.startsWith('.')).length > 0
+    return fs.readdirSync(dirPath).filter((f: string) => !f.startsWith('.')).length > 0
   })
 }
 
@@ -162,7 +162,7 @@ export function registerInit(program: Command): void {
       const projectPath = process.cwd()
       const detected = detectAgentCLIs(projectPath)
       const detectedIds = new Set(detected.map((t) => t.value))
-      const isBuilder = isTeamProject(projectPath)
+      const isBuilder = isAgentProject(projectPath)
 
       // ── 0. --json 모드에서 --tools/--all 없으면 MISSING_TOOLS 에러 ──
       if (json && !opts.tools && !opts.all && !opts.auto) {
@@ -200,7 +200,7 @@ export function registerInit(program: Command): void {
         saveInstalled(installed)
       }
 
-      // ── 2. 로컬 Builder 커맨드 (팀 프로젝트인 경우) ──
+      // ── 2. 로컬 Builder 커맨드 (에이전트 프로젝트인 경우) ──
       // relay-publish가 글로벌로 승격되어 BUILDER_COMMANDS가 비어있으면 스킵
       const localResults: { tool: string; commands: string[] }[] = []
 
@@ -316,7 +316,7 @@ export function registerInit(program: Command): void {
         }
 
         if (!isBuilder) {
-          console.log('  팀을 만들려면 \x1b[33mrelay create <name>\x1b[0m을 사용하세요.')
+          console.log('  에이전트를 만들려면 \x1b[33mrelay create <name>\x1b[0m을 사용하세요.')
           console.log()
         }
 

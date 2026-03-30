@@ -2,8 +2,8 @@ import { resolveSlugFromServer } from './api.js'
 
 export interface ParsedSlug {
   owner: string   // "haemin"
-  name: string    // "content-team"
-  full: string    // "@haemin/content-team"
+  name: string    // "content-agent"
+  full: string    // "@haemin/content-agent"
 }
 
 const SCOPED_SLUG_RE = /^@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/
@@ -47,7 +47,7 @@ export async function resolveSlug(input: string): Promise<ParsedSlug> {
   const results = await resolveSlugFromServer(input)
 
   if (results.length === 0) {
-    throw new Error(`'${input}' 팀을 찾을 수 없습니다.`)
+    throw new Error(`'${input}' 에이전트를 찾을 수 없습니다.`)
   }
 
   if (results.length === 1) {
@@ -58,6 +58,6 @@ export async function resolveSlug(input: string): Promise<ParsedSlug> {
   // 여러 개 매칭
   const list = results.map((r) => `  ${r.full}`).join('\n')
   throw new Error(
-    `'${input}'에 해당하는 팀이 여러 개입니다. 전체 slug를 지정해주세요:\n${list}`
+    `'${input}'에 해당하는 에이전트가 여러 개입니다. 전체 slug를 지정해주세요:\n${list}`
   )
 }

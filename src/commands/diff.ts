@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { Command } from 'commander'
-import { fetchTeamVersions, fetchTeamInfo } from '../lib/api.js'
+import { fetchAgentVersions, fetchAgentInfo } from '../lib/api.js'
 import { resolveSlug } from '../lib/slug.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
 import { execSync } from 'child_process'
@@ -15,7 +15,7 @@ export function registerDiff(program: Command): void {
 
       try {
         const resolved = await resolveSlug(slugInput)
-        const versions = await fetchTeamVersions(resolved.full)
+        const versions = await fetchAgentVersions(resolved.full)
 
         const ver1 = versions.find((v) => v.version === v1)
         const ver2 = versions.find((v) => v.version === v2)
@@ -37,7 +37,7 @@ export function registerDiff(program: Command): void {
           // For now, we use the current version's package_url as fallback
           // The registry API returns the latest version; for specific versions,
           // we'd need a version-specific endpoint
-          const info = await fetchTeamInfo(resolved.full)
+          const info = await fetchAgentInfo(resolved.full)
 
           if (!info.package_url) {
             throw new Error('패키지 URL을 가져올 수 없습니다')

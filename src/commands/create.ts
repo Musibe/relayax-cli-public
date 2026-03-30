@@ -23,10 +23,10 @@ function ensureGlobalUserCommands(): boolean {
 export function registerCreate(program: Command): void {
   program
     .command('create <name>')
-    .description('새 에이전트 팀 프로젝트를 생성합니다')
-    .option('--description <desc>', '팀 설명')
+    .description('새 에이전트 프로젝트를 생성합니다')
+    .option('--description <desc>', '에이전트 설명')
     .option('--tags <tags>', '태그 (쉼표 구분)')
-    .option('--visibility <visibility>', '공개 범위 (public, gated, private)')
+    .option('--visibility <visibility>', '공개 범위 (public, private, internal)')
     .action(async (name: string, opts: { description?: string; tags?: string; visibility?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = process.cwd()
@@ -39,7 +39,7 @@ export function registerCreate(program: Command): void {
         if (json) {
           console.error(JSON.stringify({ error: 'ALREADY_EXISTS', message: '.relay/relay.yaml이 이미 존재합니다.', fix: '기존 .relay/relay.yaml을 확인하세요. 새로 시작하려면 삭제 후 재시도.' }))
         } else {
-          console.error('.relay/relay.yaml이 이미 존재합니다. 기존 팀 프로젝트에서는 `relay init`을 사용하세요.')
+          console.error('.relay/relay.yaml이 이미 존재합니다. 기존 에이전트 프로젝트에서는 `relay init`을 사용하세요.')
         }
         process.exit(1)
       }
@@ -49,14 +49,14 @@ export function registerCreate(program: Command): void {
 
       let description = opts.description ?? ''
       let tags: string[] = opts.tags ? opts.tags.split(',').map((t) => t.trim()).filter(Boolean) : []
-      let visibility: 'public' | 'gated' | 'private' = (opts.visibility as 'public' | 'gated' | 'private') ?? 'public'
+      let visibility: 'public' | 'private' | 'internal' = (opts.visibility as 'public' | 'private' | 'internal') ?? 'public'
 
       if (json) {
         // --json 모드: 필수 값 부족 시 에러 반환 (프롬프트 없음)
         if (!opts.description) {
           console.error(JSON.stringify({
             error: 'MISSING_FIELD',
-            message: '팀 설명이 필요합니다.',
+            message: '에이전트 설명이 필요합니다.',
             fix: `relay create ${name} --description <설명> --json`,
             field: 'description',
           }))
@@ -69,21 +69,21 @@ export function registerCreate(program: Command): void {
             fix: `relay create ${name} --description "${description}" --visibility <visibility> --json`,
             options: [
               { value: 'public', label: '공개 — 누구나 설치' },
-              { value: 'gated', label: '링크 공유 — 접근 링크가 있는 사람만' },
-              { value: 'private', label: '비공개 — Space 멤버만' },
+              { value: 'private', label: '링크 공유 — 접근 링크가 있는 사람만' },
+              { value: 'internal', label: '비공개 — Org 멤버만' },
             ],
           }))
           process.exit(1)
         }
-        if (!['public', 'gated', 'private'].includes(opts.visibility)) {
+        if (!['public', 'private', 'internal'].includes(opts.visibility)) {
           console.error(JSON.stringify({
             error: 'INVALID_FIELD',
             message: `유효하지 않은 visibility 값: ${opts.visibility}`,
-            fix: `visibility는 public, gated, private 중 하나여야 합니다.`,
+            fix: `visibility는 public, private, internal 중 하나여야 합니다.`,
             options: [
               { value: 'public', label: '공개' },
-              { value: 'gated', label: '링크 공유' },
-              { value: 'private', label: '비공개' },
+              { value: 'private', label: '링크 공유' },
+              { value: 'internal', label: '비공개' },
             ],
           }))
           process.exit(1)
@@ -91,11 +91,11 @@ export function registerCreate(program: Command): void {
       } else if (isTTY) {
         const { input: promptInput, select: promptSelect } = await import('@inquirer/prompts')
 
-        console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1mrelay create\x1b[0m — 새 팀 프로젝트\n`)
+        console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1mrelay create\x1b[0m — 새 에이전트 프로젝트\n`)
 
         if (!description) {
           description = await promptInput({
-            message: '팀 설명:',
+            message: '에이전트 설명:',
             validate: (v) => v.trim().length > 0 ? true : '설명을 입력해주세요.',
           })
         }
@@ -109,12 +109,12 @@ export function registerCreate(program: Command): void {
         }
 
         if (!opts.visibility) {
-          visibility = await promptSelect<'public' | 'gated' | 'private'>({
+          visibility = await promptSelect<'public' | 'private' | 'internal'>({
             message: '공개 범위:',
             choices: [
               { name: '공개', value: 'public' },
-              { name: '링크 공유 (접근 링크 필요)', value: 'gated' },
-              { name: '비공개 (Space 멤버만)', value: 'private' },
+              { name: '링크 공유 (접근 링크 필요)', value: 'private' },
+              { name: '비공개 (Org 멤버만)', value: 'internal' },
             ],
           })
         }
@@ -176,7 +176,7 @@ export function registerCreate(program: Command): void {
           global_commands: globalInstalled ? 'installed' : 'already',
         }))
       } else {
-        console.log(`\n\x1b[32m✓ ${name} 팀 프로젝트 생성 완료\x1b[0m\n`)
+        console.log(`\n\x1b[32m✓ ${name} 에이전트 프로젝트 생성 완료\x1b[0m\n`)
         console.log(`  .relay/relay.yaml 생성됨`)
         if (createdDirs.length > 0) {
           console.log(`  디렉토리 생성: ${createdDirs.join(', ')}`)

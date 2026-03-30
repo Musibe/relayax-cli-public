@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { fetchTeamInfo } from '../lib/api.js'
+import { fetchAgentInfo } from '../lib/api.js'
 import { loadInstalled } from '../lib/config.js'
 
 interface OutdatedEntry {
@@ -12,7 +12,7 @@ interface OutdatedEntry {
 export function registerOutdated(program: Command): void {
   program
     .command('outdated')
-    .description('설치된 팀의 업데이트 가능 여부를 확인합니다')
+    .description('설치된 에이전트의 업데이트 가능 여부를 확인합니다')
     .action(async () => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const installed = loadInstalled()
@@ -22,7 +22,7 @@ export function registerOutdated(program: Command): void {
         if (json) {
           console.log(JSON.stringify([]))
         } else {
-          console.log('설치된 팀이 없습니다.')
+          console.log('설치된 에이전트가 없습니다.')
         }
         return
       }
@@ -32,8 +32,8 @@ export function registerOutdated(program: Command): void {
         slugs.map(async (slug): Promise<OutdatedEntry> => {
           const current = installed[slug].version
           try {
-            const team = await fetchTeamInfo(slug)
-            const latest = team.version
+            const agent = await fetchAgentInfo(slug)
+            const latest = agent.version
             return {
               slug,
               current,
@@ -53,18 +53,18 @@ export function registerOutdated(program: Command): void {
 
       const allUpToDate = results.every((r) => r.status === 'up-to-date')
       if (allUpToDate) {
-        console.log('모든 팀이 최신 버전입니다.')
+        console.log('모든 에이전트가 최신 버전입니다.')
         return
       }
 
       // Determine column widths
-      const COL_TEAM = Math.max(4, ...results.map((r) => r.slug.length))
+      const COL_TEAM = Math.max(9, ...results.map((r) => r.slug.length))
       const COL_CURRENT = Math.max(4, ...results.map((r) => `v${r.current}`.length))
       const COL_LATEST = Math.max(4, ...results.map((r) => `v${r.latest}`.length))
 
       const pad = (s: string, len: number) => s.padEnd(len)
 
-      const header = `${pad('팀', COL_TEAM)}  ${pad('현재', COL_CURRENT)}  ${pad('최신', COL_LATEST)}  상태`
+      const header = `${pad('에이전트', COL_TEAM)}  ${pad('현재', COL_CURRENT)}  ${pad('최신', COL_LATEST)}  상태`
       const separator = '-'.repeat(header.length)
 
       console.log(header)

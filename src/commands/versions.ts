@@ -1,17 +1,17 @@
 import { Command } from 'commander'
-import { fetchTeamVersions } from '../lib/api.js'
+import { fetchAgentVersions } from '../lib/api.js'
 import { resolveSlug } from '../lib/slug.js'
 
 export function registerVersions(program: Command): void {
   program
     .command('versions <slug>')
-    .description('팀 버전 목록과 릴리즈 노트를 확인합니다')
+    .description('에이전트 버전 목록과 릴리즈 노트를 확인합니다')
     .action(async (slugInput: string) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       try {
         const resolved = await resolveSlug(slugInput)
-        const versions = await fetchTeamVersions(resolved.full)
+        const versions = await fetchAgentVersions(resolved.full)
 
         if (json) {
           console.log(JSON.stringify({ slug: resolved.full, versions }))

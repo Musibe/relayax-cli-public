@@ -1,12 +1,12 @@
 import { loadInstalled } from './config.js'
-import { fetchTeamInfo, sendUsagePing } from './api.js'
+import { fetchAgentInfo, sendUsagePing } from './api.js'
 import { isCacheValid, updateCacheTimestamp } from './update-cache.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json') as { version: string }
 
 export interface UpdateResult {
-  type: 'cli' | 'team'
+  type: 'cli' | 'agent'
   slug?: string
   current: string
   latest: string
@@ -33,7 +33,7 @@ export async function checkCliVersion(force?: boolean): Promise<UpdateResult | n
   return null
 }
 
-export async function checkTeamVersion(
+export async function checkAgentVersion(
   slug: string,
   force?: boolean
 ): Promise<UpdateResult | null> {
@@ -49,22 +49,22 @@ export async function checkTeamVersion(
       return null
     }
 
-    const team = await fetchTeamInfo(slug)
+    const agent = await fetchAgentInfo(slug)
     updateCacheTimestamp(slug)
 
     // Fire-and-forget usage ping (only when cache expired = actual API call happened)
-    const teamId = entry.team_id ?? team.id
-    if (teamId) {
-      sendUsagePing(teamId, slug, entry.version)
+    const agentId = entry.agent_id ?? agent.id
+    if (agentId) {
+      sendUsagePing(agentId, slug, entry.version)
     }
 
-    if (team.version !== entry.version) {
+    if (agent.version !== entry.version) {
       return {
-        type: 'team',
+        type: 'agent',
         slug,
         current: entry.version,
-        latest: team.version,
-        author: team.author?.username,
+        latest: agent.version,
+        author: agent.author?.username,
       }
     }
   } catch {
@@ -73,13 +73,13 @@ export async function checkTeamVersion(
   return null
 }
 
-export async function checkAllTeams(force?: boolean): Promise<UpdateResult[]> {
+export async function checkAllAgents(force?: boolean): Promise<UpdateResult[]> {
   const installed = loadInstalled()
   const slugs = Object.keys(installed)
   const results: UpdateResult[] = []
 
   for (const slug of slugs) {
-    const result = await checkTeamVersion(slug, force)
+    const result = await checkAgentVersion(slug, force)
     if (result) results.push(result)
   }
 

@@ -8,8 +8,8 @@ export async function joinOrg(orgSlug: string, code: string): Promise<{ type: st
     throw new Error('LOGIN_REQUIRED')
   }
 
-  // Use the invite link via API
-  const res = await fetch(`${API_URL}/api/invite-links/${code}/use`, {
+  // Use the access code via API
+  const res = await fetch(`${API_URL}/api/access-codes/${code}/use`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ export function registerJoin(program: Command): void {
             console.log(`\x1b[32m✅ @${slug} Organization에 가입했습니다 (역할: ${result.role ?? 'member'})\x1b[0m`)
             console.log(`\n\x1b[33m  대시보드: www.relayax.com/orgs/${slug}\x1b[0m`)
           } else {
-            console.log(`\x1b[32m✅ 팀 접근 권한이 부여되었습니다\x1b[0m`)
+            console.log(`\x1b[32m✅ 에이전트 접근 권한이 부여되었습니다\x1b[0m`)
           }
         }
       } catch (err) {

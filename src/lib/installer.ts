@@ -22,7 +22,7 @@ function copyDirRecursive(src: string, dest: string): string[] {
   return copiedFiles
 }
 
-export function installTeam(
+export function installAgent(
   extractedDir: string,
   installPath: string
 ): string[] {
@@ -37,7 +37,7 @@ export function installTeam(
   return installedFiles
 }
 
-export function uninstallTeam(files: string[]): string[] {
+export function uninstallAgent(files: string[]): string[] {
   const removed: string[] = []
   for (const file of files) {
     try {

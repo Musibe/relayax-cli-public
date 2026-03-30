@@ -7,19 +7,19 @@ import {
   loadGlobalInstalled,
   saveGlobalInstalled,
 } from '../lib/config.js'
-import { uninstallTeam, cleanEmptyParents } from '../lib/installer.js'
+import { uninstallAgent, cleanEmptyParents } from '../lib/installer.js'
 import { isScopedSlug, parseSlug } from '../lib/slug.js'
 
 export function registerUninstall(program: Command): void {
   program
     .command('uninstall <slug>')
-    .description('에이전트 팀 제거')
+    .description('에이전트 제거')
     .action((slugInput: string) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const localInstalled = loadInstalled()
       const globalInstalled = loadGlobalInstalled()
 
-      // Resolve slug — support short names like "cardnews-team"
+      // Resolve slug — support short names like "cardnews-agent"
       let slug: string
       if (isScopedSlug(slugInput)) {
         slug = slugInput
@@ -49,12 +49,12 @@ export function registerUninstall(program: Command): void {
 
       // Remove from local registry
       if (localEntry) {
-        const removed = uninstallTeam(localEntry.files)
+        const removed = uninstallAgent(localEntry.files)
         totalRemoved += removed.length
 
         // Remove deployed files
         if (localEntry.deployed_files && localEntry.deployed_files.length > 0) {
-          const deployedRemoved = uninstallTeam(localEntry.deployed_files)
+          const deployedRemoved = uninstallAgent(localEntry.deployed_files)
           totalRemoved += deployedRemoved.length
           // Clean empty parent directories
           const boundary = path.join(process.cwd(), '.claude')
@@ -71,13 +71,13 @@ export function registerUninstall(program: Command): void {
       if (globalEntry) {
         // Only remove files if not already handled by local entry
         if (!localEntry) {
-          const removed = uninstallTeam(globalEntry.files)
+          const removed = uninstallAgent(globalEntry.files)
           totalRemoved += removed.length
         }
 
         // Remove globally deployed files
         if (globalEntry.deployed_files && globalEntry.deployed_files.length > 0) {
-          const deployedRemoved = uninstallTeam(globalEntry.deployed_files)
+          const deployedRemoved = uninstallAgent(globalEntry.deployed_files)
           totalRemoved += deployedRemoved.length
           // Clean empty parent directories
           const boundary = path.join(os.homedir(), '.claude')
@@ -92,7 +92,7 @@ export function registerUninstall(program: Command): void {
 
       const result = {
         status: 'ok',
-        team: slug,
+        agent: slug,
         files_removed: totalRemoved,
       }
 

@@ -1,18 +1,18 @@
 import { Command } from 'commander'
-import { fetchTeamInfo, fetchTeamVersions, reportInstall } from '../lib/api.js'
+import { fetchAgentInfo, fetchAgentVersions, reportInstall } from '../lib/api.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
-import { installTeam } from '../lib/installer.js'
+import { installAgent } from '../lib/installer.js'
 import { getInstallPath, loadInstalled, saveInstalled, getValidToken } from '../lib/config.js'
 import { resolveSlug, isScopedSlug } from '../lib/slug.js'
 import { formatContactParts } from '../lib/contact-format.js'
-import { injectPreambleToTeam } from '../lib/preamble.js'
+import { injectPreambleToAgent } from '../lib/preamble.js'
 
 export function registerUpdate(program: Command): void {
   program
     .command('update <slug>')
-    .description('설치된 에이전트 팀을 최신 버전으로 업데이트합니다')
+    .description('설치된 에이전트를 최신 버전으로 업데이트합니다')
     .option('--path <install_path>', '설치 경로 지정 (기본: ./.claude)')
-    .option('--code <code>', '초대 코드 (비공개 팀 업데이트 시 필요)')
+    .option('--code <code>', '초대 코드 (비공개 에이전트 업데이트 시 필요)')
     .action(async (slugInput: string, opts: { path?: string; code?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const installPath = getInstallPath(opts.path)
@@ -34,9 +34,9 @@ export function registerUpdate(program: Command): void {
         const currentEntry = installed[slug]
         const currentVersion = currentEntry?.version ?? null
 
-        // Fetch latest team metadata
-        const team = await fetchTeamInfo(slug)
-        const latestVersion = team.version
+        // Fetch latest agent metadata
+        const agent = await fetchAgentInfo(slug)
+        const latestVersion = agent.version
 
         if (currentVersion && currentVersion === latestVersion) {
           if (json) {
@@ -48,27 +48,27 @@ export function registerUpdate(program: Command): void {
         }
 
         // Visibility check
-        const visibility = team.visibility ?? 'public'
-        if (visibility === 'private') {
+        const visibility = agent.visibility ?? 'public'
+        if (visibility === 'internal') {
           const token = await getValidToken()
           if (!token) {
-            console.error('이 팀은 Space 멤버만 업데이트할 수 있습니다. `relay login`을 먼저 실행하세요.')
+            console.error('이 에이전트는 Org 멤버만 업데이트할 수 있습니다. `relay login`을 먼저 실행하세요.')
             process.exit(1)
           }
         }
 
         // Download package
-        const tarPath = await downloadPackage(team.package_url, tempDir)
+        const tarPath = await downloadPackage(agent.package_url, tempDir)
 
         // Extract
         const extractDir = `${tempDir}/extracted`
         await extractPackage(tarPath, extractDir)
 
         // Inject preamble (update check) before copying
-        injectPreambleToTeam(extractDir, slug)
+        injectPreambleToAgent(extractDir, slug)
 
         // Copy files to install_path
-        const files = installTeam(extractDir, installPath)
+        const files = installAgent(extractDir, installPath)
 
         // Preserve deploy info but clear deployed_files (agent needs to re-deploy)
         const previousDeployScope = currentEntry?.deploy_scope
@@ -76,7 +76,7 @@ export function registerUpdate(program: Command): void {
 
         // Update installed.json with new version
         installed[slug] = {
-          team_id: team.id,
+          agent_id: agent.id,
           version: latestVersion,
           installed_at: new Date().toISOString(),
           files,
@@ -86,8 +86,8 @@ export function registerUpdate(program: Command): void {
         }
         saveInstalled(installed)
 
-        // Report install (non-blocking, team_id 기반)
-        await reportInstall(team.id, slug, latestVersion)
+        // Report install (non-blocking, agent_id 기반)
+        await reportInstall(agent.id, slug, latestVersion)
 
         const result = {
           status: 'updated',
@@ -103,19 +103,19 @@ export function registerUpdate(program: Command): void {
           console.log(JSON.stringify(result))
         } else {
           const fromLabel = currentVersion ? `v${currentVersion} → ` : ''
-          console.log(`\n\x1b[32m✓ ${team.name} ${fromLabel}v${latestVersion} 업데이트 완료\x1b[0m`)
+          console.log(`\n\x1b[32m✓ ${agent.name} ${fromLabel}v${latestVersion} 업데이트 완료\x1b[0m`)
           console.log(`  설치 위치: \x1b[36m${installPath}\x1b[0m`)
           console.log(`  파일 수:   ${files.length}개`)
 
           // Builder business card
-          const authorUsername = team.author?.username
-          const authorDisplayName = team.author?.display_name ?? authorUsername ?? ''
-          const contactParts = formatContactParts(team.author?.contact_links)
-          const hasCard = team.welcome || contactParts.length > 0 || authorUsername
+          const authorUsername = agent.author?.username
+          const authorDisplayName = agent.author?.display_name ?? authorUsername ?? ''
+          const contactParts = formatContactParts(agent.author?.contact_links)
+          const hasCard = agent.welcome || contactParts.length > 0 || authorUsername
 
           // Show changelog for this version
           try {
-            const versions = await fetchTeamVersions(slug)
+            const versions = await fetchAgentVersions(slug)
             const thisVersion = versions.find((v) => v.version === latestVersion)
             if (thisVersion?.changelog) {
               console.log(`\n  \x1b[90m── Changelog ──────────────────────────────\x1b[0m`)
@@ -130,8 +130,8 @@ export function registerUpdate(program: Command): void {
 
           if (hasCard) {
             console.log(`\n  \x1b[90m┌─ ${authorDisplayName || '빌더'}의 명함 ${'─'.repeat(Math.max(0, 34 - (authorDisplayName || '빌더').length))}┐\x1b[0m`)
-            if (team.welcome) {
-              const truncated = team.welcome.length > 45 ? team.welcome.slice(0, 45) + '...' : team.welcome
+            if (agent.welcome) {
+              const truncated = agent.welcome.length > 45 ? agent.welcome.slice(0, 45) + '...' : agent.welcome
               console.log(`  \x1b[90m│\x1b[0m  💬 "${truncated}"`)
             }
             if (contactParts.length > 0) {

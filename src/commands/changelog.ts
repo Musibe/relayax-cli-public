@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 export function registerChangelog(program: Command): void {
   const changelog = program
     .command('changelog')
-    .description('팀 패키지의 changelog를 관리합니다')
+    .description('에이전트 패키지의 changelog를 관리합니다')
 
   changelog
     .command('add')
@@ -16,7 +16,7 @@ export function registerChangelog(program: Command): void {
       const yamlPath = path.resolve('relay.yaml')
 
       if (!fs.existsSync(yamlPath)) {
-        console.error('relay.yaml을 찾을 수 없습니다. 팀 패키지 디렉토리에서 실행하세요.')
+        console.error('relay.yaml을 찾을 수 없습니다. 에이전트 패키지 디렉토리에서 실행하세요.')
         process.exit(1)
       }
 

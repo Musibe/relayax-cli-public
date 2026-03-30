@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { searchTeams } from '../lib/api.js'
+import { searchAgents } from '../lib/api.js'
 import type { SearchResult } from '../types.js'
 
 function formatTable(results: SearchResult[]): string {
@@ -34,13 +34,13 @@ function formatTable(results: SearchResult[]): string {
 export function registerSearch(program: Command): void {
   program
     .command('search <keyword>')
-    .description('Space에서 에이전트 팀 검색 (공개 팀 + 내 Space 팀)')
+    .description('Space에서 에이전트 검색 (공개 에이전트 + 내 Space 에이전트)')
     .option('--tag <tag>', '태그로 필터링')
     .option('--space <space>', '특정 Space 내에서 검색')
     .action(async (keyword: string, opts: { tag?: string; space?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       try {
-        const results = await searchTeams(keyword, opts.tag)
+        const results = await searchAgents(keyword, opts.tag)
         if (json) {
           console.log(JSON.stringify({ results }))
         } else {

@@ -4,14 +4,14 @@ export interface ContactItem {
   value: string;
 }
 
-export interface InstalledTeam {
-  /** team UUID — 설치 카운트/핑 등 서버 통신에 사용 */
-  team_id?: string;
+export interface InstalledAgent {
+  /** agent UUID — 설치 카운트/핑 등 서버 통신에 사용 */
+  agent_id?: string;
   version: string;
   installed_at: string;
   files: string[];
-  type?: 'team' | 'system';
-  /** Org 소속 팀인 경우 Org slug */
+  type?: 'agent' | 'system';
+  /** Org 소속 에이전트인 경우 Org slug */
   org_slug?: string;
   /** 배치 범위 — 에이전트가 relay deploy-record로 기록 */
   deploy_scope?: 'global' | 'local';
@@ -21,11 +21,11 @@ export interface InstalledTeam {
 
 /** 키는 scoped slug 포맷: "@owner/name" */
 export interface InstalledRegistry {
-  [scopedSlug: string]: InstalledTeam;
+  [scopedSlug: string]: InstalledAgent;
 }
 
-export interface TeamRegistryInfo {
-  /** team UUID */
+export interface AgentRegistryInfo {
+  /** agent UUID */
   id: string;
   /** scoped slug 포맷: "@owner/name" */
   slug: string;
@@ -43,7 +43,7 @@ export interface TeamRegistryInfo {
   tags?: string[];
   install_count?: number;
   requires?: Record<string, unknown>;
-  visibility?: "public" | "gated" | "private";
+  visibility?: "public" | "internal" | "private";
   welcome?: string | null;
   contact?: Record<string, string> | null;
   author?: {

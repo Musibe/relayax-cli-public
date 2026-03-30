@@ -1,4 +1,4 @@
-import type { TeamRegistryInfo, SearchResult } from '../types.js'
+import type { AgentRegistryInfo, SearchResult } from '../types.js'
 import { API_URL, getValidToken } from './config.js'
 
 export async function fetchMyOrgs(): Promise<{ id: string; slug: string; name: string; role: string }[]> {
@@ -12,18 +12,18 @@ export async function fetchMyOrgs(): Promise<{ id: string; slug: string; name: s
   return res.json() as Promise<{ id: string; slug: string; name: string; role: string }[]>
 }
 
-export async function fetchTeamInfo(slug: string): Promise<TeamRegistryInfo> {
+export async function fetchAgentInfo(slug: string): Promise<AgentRegistryInfo> {
   const registrySlug = slug.startsWith('@') ? slug.slice(1) : slug
   const url = `${API_URL}/api/registry/${registrySlug}`
   const res = await fetch(url)
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`팀 정보 조회 실패 (${res.status}): ${body}`)
+    throw new Error(`에이전트 정보 조회 실패 (${res.status}): ${body}`)
   }
-  return res.json() as Promise<TeamRegistryInfo>
+  return res.json() as Promise<AgentRegistryInfo>
 }
 
-export async function searchTeams(
+export async function searchAgents(
   query: string,
   tag?: string
 ): Promise<SearchResult[]> {
@@ -39,13 +39,13 @@ export async function searchTeams(
   return data.results
 }
 
-export interface TeamVersionInfo {
+export interface AgentVersionInfo {
   version: string
   changelog: string | null
   created_at: string
 }
 
-export async function fetchTeamVersions(slug: string): Promise<TeamVersionInfo[]> {
+export async function fetchAgentVersions(slug: string): Promise<AgentVersionInfo[]> {
   const registrySlug = slug.startsWith('@') ? slug.slice(1) : slug
   const url = `${API_URL}/api/registry/${registrySlug}/versions`
   const res = await fetch(url)
@@ -53,11 +53,11 @@ export async function fetchTeamVersions(slug: string): Promise<TeamVersionInfo[]
     const body = await res.text()
     throw new Error(`버전 목록 조회 실패 (${res.status}): ${body}`)
   }
-  return res.json() as Promise<TeamVersionInfo[]>
+  return res.json() as Promise<AgentVersionInfo[]>
 }
 
-export async function reportInstall(teamId: string, slug: string, version?: string): Promise<void> {
-  const url = `${API_URL}/api/teams/${teamId}/install`
+export async function reportInstall(agentId: string, slug: string, version?: string): Promise<void> {
+  const url = `${API_URL}/api/agents/${agentId}/install`
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const body: Record<string, string> = { slug }
   if (version) body.version = version
@@ -82,6 +82,7 @@ export async function reportInstall(teamId: string, slug: string, version?: stri
   }
 }
 
+
 export interface ResolvedSlug {
   owner: string
   name: string
@@ -98,14 +99,14 @@ export async function resolveSlugFromServer(name: string): Promise<ResolvedSlug[
   return data.results
 }
 
-export async function sendUsagePing(teamId: string, slug: string, version?: string): Promise<void> {
+export async function sendUsagePing(agentId: string, slug: string, version?: string): Promise<void> {
   const { createHash } = await import('crypto')
   const { hostname, userInfo } = await import('os')
   const deviceHash = createHash('sha256')
     .update(`${hostname()}:${userInfo().username}`)
     .digest('hex')
 
-  const url = `${API_URL}/api/teams/${teamId}/ping`
+  const url = `${API_URL}/api/agents/${agentId}/ping`
   const payload: Record<string, string> = { device_hash: deviceHash, slug }
   if (version) payload.installed_version = version
 

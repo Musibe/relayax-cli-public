@@ -37,7 +37,7 @@ export function registerDeployRecord(program: Command): void {
           : path.resolve(f)
       )
 
-      // Find the team in the appropriate registry
+      // Find the agent in the appropriate registry
       const localRegistry = loadInstalled()
       const globalRegistry = loadGlobalInstalled()
 
@@ -54,7 +54,7 @@ export function registerDeployRecord(program: Command): void {
         slug = match ?? slugInput
       }
 
-      // Check if team exists in either registry
+      // Check if agent exists in either registry
       const entry = localRegistry[slug] ?? globalRegistry[slug]
       if (!entry) {
         const msg = { error: 'NOT_INSTALLED', message: `'${slugInput}'는 설치되어 있지 않습니다.` }

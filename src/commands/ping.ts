@@ -24,16 +24,16 @@ export function registerPing(program: Command): void {
         slug = match ?? slugInput
       }
 
-      // Resolve version and team_id from installed registry
+      // Resolve version and agent_id from installed registry
       const local = loadInstalled()
       const global = loadGlobalInstalled()
       const entry = local[slug] ?? global[slug]
       const version = entry?.version
-      const teamId = entry?.team_id
+      const agentId = entry?.agent_id
 
-      // Fire-and-forget ping (team_id 기반, 없으면 skip)
-      if (teamId) {
-        await sendUsagePing(teamId, slug, version)
+      // Fire-and-forget ping (agent_id 기반, 없으면 skip)
+      if (agentId) {
+        await sendUsagePing(agentId, slug, version)
       }
 
       if (!opts.quiet) {

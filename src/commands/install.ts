@@ -1,20 +1,20 @@
 import fs from 'fs'
 import path from 'path'
 import { Command } from 'commander'
-import { fetchTeamInfo, reportInstall, sendUsagePing } from '../lib/api.js'
-import type { TeamRegistryInfo } from '../types.js'
+import { fetchAgentInfo, reportInstall, sendUsagePing } from '../lib/api.js'
+import type { AgentRegistryInfo } from '../types.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
 import { loadInstalled, saveInstalled, getValidToken } from '../lib/config.js'
 import { resolveSlug } from '../lib/slug.js'
 import { formatContactParts } from '../lib/contact-format.js'
-import { injectPreambleToTeam } from '../lib/preamble.js'
+import { injectPreambleToAgent } from '../lib/preamble.js'
 import { hasGlobalUserCommands, installGlobalUserCommands } from './init.js'
 
 export function registerInstall(program: Command): void {
   program
     .command('install <slug>')
-    .description('에이전트 팀 패키지를 .relay/teams/에 다운로드합니다')
-    .option('--join-code <code>', '초대 코드 (Organization 팀 설치 시 자동 가입)')
+    .description('에이전트 패키지를 .relay/agents/에 다운로드합니다')
+    .option('--join-code <code>', '초대 코드 (Organization 에이전트 설치 시 자동 가입)')
     .action(async (slugInput: string, _opts: { joinCode?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = process.cwd()
@@ -29,13 +29,12 @@ export function registerInstall(program: Command): void {
       }
 
       try {
-        // Resolve scoped slug and fetch team metadata
-        let team: TeamRegistryInfo | undefined
+        // Resolve scoped slug and fetch agent metadata
+        let agent: AgentRegistryInfo | undefined
         let slug: string
         let parsed: { owner: string; name: string; full: string }
 
-        // Extract version from @owner/team@version syntax
-        // Extract version from @owner/team@version syntax (e.g. acme/writer@1.2.0)
+        // Extract version from @owner/agent@version syntax (e.g. acme/writer@1.2.0)
         // Version-specific install is not yet supported by the registry API;
         // the match is kept for future use when per-version package URLs are available.
         const versionMatch = slugInput.match(/^(.+)@(\d+\.\d+\.\d+.*)$/)
@@ -45,7 +44,7 @@ export function registerInstall(program: Command): void {
         slug = parsed.full
 
         try {
-          team = await fetchTeamInfo(slug)
+          agent = await fetchAgentInfo(slug)
         } catch (fetchErr) {
           const fetchMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
           if (fetchMsg.includes('403')) {
@@ -62,18 +61,18 @@ export function registerInstall(program: Command): void {
               }
             } catch { /* ignore parse errors */ }
 
-            // Gated team: show purchase info + relay access hint
-            if (errorVisibility === 'gated' || purchaseInfo) {
+            // Private agent: show purchase info + relay access hint
+            if (errorVisibility === 'private' || purchaseInfo) {
               if (json) {
                 console.error(JSON.stringify({
-                  error: 'GATED_ACCESS_REQUIRED',
-                  message: '이 팀은 접근 권한이 필요합니다.',
+                  error: 'ACCESS_REQUIRED',
+                  message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
                   purchase_info: purchaseInfo ?? null,
                   fix: '접근 링크 코드가 있으면: relay access <slug> --code <코드>',
                 }))
               } else {
-                console.error('\x1b[31m이 팀은 접근 권한이 필요합니다.\x1b[0m')
+                console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
                 if (purchaseInfo?.message) {
                   console.error(`\n  \x1b[36m${purchaseInfo.message}\x1b[0m`)
                 }
@@ -86,28 +85,28 @@ export function registerInstall(program: Command): void {
             }
 
             if (membershipStatus === 'member') {
-              // Member but no access to this specific team
+              // Member but no access to this specific agent
               if (json) {
                 console.error(JSON.stringify({
                   error: 'NO_ACCESS',
-                  message: '이 팀에 대한 접근 권한이 없습니다.',
+                  message: '이 에이전트에 대한 접근 권한이 없습니다.',
                   slug,
-                  fix: '이 팀의 접근 링크 코드가 있으면 `relay access ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 팀 제작자에게 문의하세요.',
+                  fix: '이 에이전트의 접근 링크 코드가 있으면 `relay access ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 에이전트 제작자에게 문의하세요.',
                 }))
               } else {
-                console.error('\x1b[31m이 팀에 대한 접근 권한이 없습니다.\x1b[0m')
+                console.error('\x1b[31m이 에이전트에 대한 접근 권한이 없습니다.\x1b[0m')
               }
               process.exit(1)
             } else {
               if (json) {
                 console.error(JSON.stringify({
                   error: 'ACCESS_REQUIRED',
-                  message: '이 팀은 접근 권한이 필요합니다.',
+                  message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
                   fix: '초대 코드가 있으면 `relay join <org-slug> --code <코드>`로 가입하세요.',
                 }))
               } else {
-                console.error('\x1b[31m이 팀은 접근 권한이 필요합니다.\x1b[0m')
+                console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
                 console.error('\x1b[33m초대 코드가 있으면 `relay join <org-slug> --code <코드>`로 가입하세요.\x1b[0m')
               }
               process.exit(1)
@@ -117,19 +116,22 @@ export function registerInstall(program: Command): void {
           }
         }
 
-        if (!team) throw new Error('팀 정보를 가져오지 못했습니다.')
+        if (!agent) throw new Error('에이전트 정보를 가져오지 못했습니다.')
 
-        const teamDir = path.join(projectPath, '.relay', 'teams', parsed.owner, parsed.name)
+        // Re-bind as non-optional so TypeScript tracks the narrowing through nested scopes
+        let resolvedAgent: AgentRegistryInfo = agent
+
+        const agentDir = path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
 
         // 2. Visibility check + auto-login
-        const visibility = team.visibility ?? 'public'
-        if (visibility === 'private') {
+        const visibility = resolvedAgent.visibility ?? 'public'
+        if (visibility === 'internal') {
           let token = await getValidToken()
           if (!token) {
             const isTTY = Boolean(process.stdin.isTTY)
             if (isTTY && !json) {
               // Auto-login: TTY 환경에서 자동으로 login 플로우 트리거
-              console.error('\x1b[33m⚙ 이 팀은 로그인이 필요합니다. 로그인을 시작합니다...\x1b[0m')
+              console.error('\x1b[33m⚙ 이 에이전트는 로그인이 필요합니다. 로그인을 시작합니다...\x1b[0m')
               const { runLogin } = await import('./login.js')
               await runLogin()
               token = await getValidToken()
@@ -140,11 +142,11 @@ export function registerInstall(program: Command): void {
                   error: 'LOGIN_REQUIRED',
                   visibility,
                   slug,
-                  message: '이 팀은 로그인이 필요합니다. relay login을 먼저 실행하세요.',
+                  message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
                   fix: 'relay login 실행 후 재시도하세요.',
                 }))
               } else {
-                console.error('\x1b[31m이 팀은 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
+                console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
               }
               process.exit(1)
             }
@@ -154,30 +156,30 @@ export function registerInstall(program: Command): void {
         // 3. Download package (retry once if signed URL expired)
         let tarPath: string
         try {
-          tarPath = await downloadPackage(team.package_url, tempDir)
+          tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
         } catch (dlErr) {
           const dlMsg = dlErr instanceof Error ? dlErr.message : String(dlErr)
           if (dlMsg.includes('403') || dlMsg.includes('expired')) {
-            // Signed URL expired — re-fetch team info for new URL and retry
+            // Signed URL expired — re-fetch agent info for new URL and retry
             if (!json) {
               console.error('\x1b[33m⚙ 다운로드 URL 만료, 재시도 중...\x1b[0m')
             }
-            team = await fetchTeamInfo(slug)
-            tarPath = await downloadPackage(team.package_url, tempDir)
+            resolvedAgent = await fetchAgentInfo(slug)
+            tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
           } else {
             throw dlErr
           }
         }
 
-        // 4. Extract to .relay/teams/<slug>/
-        if (fs.existsSync(teamDir)) {
-          fs.rmSync(teamDir, { recursive: true, force: true })
+        // 4. Extract to .relay/agents/<slug>/
+        if (fs.existsSync(agentDir)) {
+          fs.rmSync(agentDir, { recursive: true, force: true })
         }
-        fs.mkdirSync(teamDir, { recursive: true })
-        await extractPackage(tarPath, teamDir)
+        fs.mkdirSync(agentDir, { recursive: true })
+        await extractPackage(tarPath, agentDir)
 
         // 4.5. Inject preamble (update check) into SKILL.md and commands
-        injectPreambleToTeam(teamDir, slug)
+        injectPreambleToAgent(agentDir, slug)
 
         // 5. Count extracted files
         function countFiles(dir: string): number {
@@ -192,63 +194,63 @@ export function registerInstall(program: Command): void {
           }
           return count
         }
-        const fileCount = countFiles(teamDir)
+        const fileCount = countFiles(agentDir)
 
         // 6. Record in installed.json
         const installed = loadInstalled()
         installed[slug] = {
-          team_id: team.id,
-          version: team.version,
+          agent_id: resolvedAgent.id,
+          version: resolvedAgent.version,
           installed_at: new Date().toISOString(),
-          files: [teamDir],
+          files: [agentDir],
         }
         saveInstalled(installed)
 
-        // 7. Report install + usage ping (non-blocking, team_id 기반)
-        await reportInstall(team.id, slug, team.version)
-        sendUsagePing(team.id, slug, team.version)
+        // 7. Report install + usage ping (non-blocking, agent_id 기반)
+        await reportInstall(resolvedAgent.id, slug, resolvedAgent.version)
+        sendUsagePing(resolvedAgent.id, slug, resolvedAgent.version)
 
         const result = {
           status: 'ok',
-          team: team.name,
+          agent: resolvedAgent.name,
           slug,
-          version: team.version,
-          commands: team.commands,
+          version: resolvedAgent.version,
+          commands: resolvedAgent.commands,
           files: fileCount,
-          install_path: teamDir,
-          author: team.author ? {
-            username: team.author.username,
-            display_name: team.author.display_name ?? null,
-            contact_links: team.author.contact_links ?? [],
+          install_path: agentDir,
+          author: resolvedAgent.author ? {
+            username: resolvedAgent.author.username,
+            display_name: resolvedAgent.author.display_name ?? null,
+            contact_links: resolvedAgent.author.contact_links ?? [],
           } : null,
-          welcome: team.welcome ?? null,
+          welcome: resolvedAgent.welcome ?? null,
         }
 
         if (json) {
           console.log(JSON.stringify(result))
         } else {
-          const authorUsername = team.author?.username
-          const authorDisplayName = team.author?.display_name ?? authorUsername ?? ''
+          const authorUsername = resolvedAgent.author?.username
+          const authorDisplayName = resolvedAgent.author?.display_name ?? authorUsername ?? ''
           const authorSuffix = authorUsername ? `  \x1b[90mby @${authorUsername}\x1b[0m` : ''
 
-          console.log(`\n\x1b[32m✓ ${team.name} 다운로드 완료\x1b[0m  v${team.version}${authorSuffix}`)
-          console.log(`  위치: \x1b[36m${teamDir}\x1b[0m`)
+          console.log(`\n\x1b[32m✓ ${resolvedAgent.name} 다운로드 완료\x1b[0m  v${resolvedAgent.version}${authorSuffix}`)
+          console.log(`  위치: \x1b[36m${agentDir}\x1b[0m`)
           console.log(`  파일: ${fileCount}개`)
-          if (team.commands.length > 0) {
+          if (resolvedAgent.commands.length > 0) {
             console.log('\n  포함된 커맨드:')
-            for (const cmd of team.commands) {
+            for (const cmd of resolvedAgent.commands) {
               console.log(`    \x1b[33m/${cmd.name}\x1b[0m - ${cmd.description}`)
             }
           }
 
           // Builder business card
-          const contactParts = formatContactParts(team.author?.contact_links)
-          const hasCard = team.welcome || contactParts.length > 0 || authorUsername
+          const contactParts = formatContactParts(resolvedAgent.author?.contact_links)
+          const hasCard = resolvedAgent.welcome || contactParts.length > 0 || authorUsername
 
           if (hasCard) {
             console.log(`\n  \x1b[90m┌─ ${authorDisplayName || authorUsername || '빌더'}의 명함 ${'─'.repeat(Math.max(0, 34 - (authorDisplayName || authorUsername || '빌더').length))}┐\x1b[0m`)
-            if (team.welcome) {
-              const truncated = team.welcome.length > 45 ? team.welcome.slice(0, 45) + '...' : team.welcome
+            if (resolvedAgent.welcome) {
+              const truncated = resolvedAgent.welcome.length > 45 ? resolvedAgent.welcome.slice(0, 45) + '...' : resolvedAgent.welcome
               console.log(`  \x1b[90m│\x1b[0m  💬 "${truncated}"`)
             }
             if (contactParts.length > 0) {
@@ -261,13 +263,13 @@ export function registerInstall(program: Command): void {
           }
 
           // Usage hint (type-aware)
-          const teamType = team.type
-          if (teamType === 'passive') {
+          const agentType = resolvedAgent.type
+          if (agentType === 'passive') {
             console.log(`\n\x1b[33m💡 자동 적용됩니다. 별도 실행 없이 동작합니다.\x1b[0m`)
-          } else if (teamType === 'hybrid' && team.commands && team.commands.length > 0) {
-            console.log(`\n\x1b[33m💡 자동 적용 + \x1b[1m/${team.commands[0].name}\x1b[0m\x1b[33m 으로 추가 기능을 사용할 수 있습니다.\x1b[0m`)
-          } else if (team.commands && team.commands.length > 0) {
-            console.log(`\n\x1b[33m💡 사용법: \x1b[1m/${team.commands[0].name}\x1b[0m`)
+          } else if (agentType === 'hybrid' && resolvedAgent.commands && resolvedAgent.commands.length > 0) {
+            console.log(`\n\x1b[33m💡 자동 적용 + \x1b[1m/${resolvedAgent.commands[0].name}\x1b[0m\x1b[33m 으로 추가 기능을 사용할 수 있습니다.\x1b[0m`)
+          } else if (resolvedAgent.commands && resolvedAgent.commands.length > 0) {
+            console.log(`\n\x1b[33m💡 사용법: \x1b[1m/${resolvedAgent.commands[0].name}\x1b[0m`)
           } else {
             console.log(`\n\x1b[33m💡 설치 완료! AI 에이전트에서 사용할 수 있습니다.\x1b[0m`)
           }

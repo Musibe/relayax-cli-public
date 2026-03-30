@@ -21,6 +21,7 @@ import { registerOrgs } from './commands/orgs.js'
 import { registerDeployRecord } from './commands/deploy-record.js'
 import { registerPing } from './commands/ping.js'
 import { registerAccess } from './commands/access.js'
+import { registerGrant } from './commands/grant.js'
 import { registerVersions } from './commands/versions.js'
 import { registerDiff } from './commands/diff.js'
 
@@ -55,6 +56,7 @@ registerOrgs(program)
 registerDeployRecord(program)
 registerPing(program)
 registerAccess(program)
+registerGrant(program)
 registerVersions(program)
 registerDiff(program)
 

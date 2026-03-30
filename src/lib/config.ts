@@ -39,7 +39,7 @@ export function ensureGlobalRelayDir(): void {
   }
 }
 
-/** cwd/.relay/ — 프로젝트 로컬 (installed.json, teams/) */
+/** cwd/.relay/ — 프로젝트 로컬 (installed.json, agents/) */
 export function ensureProjectRelayDir(): void {
   const dir = path.join(process.cwd(), '.relay')
   if (!fs.existsSync(dir)) {
@@ -194,7 +194,7 @@ export async function getValidToken(): Promise<string | undefined> {
 
 /**
  * 레거시 키 정규화:
- * - `@spaces/{slug}/{team}` → `@{slug}/{team}` (Space 레거시)
+ * - `@spaces/{slug}/{agent}` → `@{slug}/{agent}` (Space 레거시)
  * - `space_slug` → `org_slug` (필드명 마이그레이션)
  */
 function normalizeInstalledRegistry(raw: InstalledRegistry): InstalledRegistry {

@@ -12,7 +12,7 @@ import {
 interface StatusResult {
   login: { authenticated: boolean; username?: string }
   agent: { detected: string | null; global_commands: boolean; local_commands: boolean }
-  team: { is_team: boolean; name?: string; slug?: string; version?: string } | null
+  project: { is_agent: boolean; name?: string; slug?: string; version?: string } | null
 }
 
 async function resolveUsername(token: string): Promise<string | undefined> {
@@ -61,26 +61,26 @@ export function registerStatus(program: Command): void {
         )
       }
 
-      // 3. 팀 정보
+      // 3. 에이전트 프로젝트 정보
       const relayYamlPath = path.join(projectPath, '.relay', 'relay.yaml')
-      let team: StatusResult['team'] = null
+      let project: StatusResult['project'] = null
 
       if (fs.existsSync(relayYamlPath)) {
         try {
           const yaml = await import('js-yaml')
           const content = fs.readFileSync(relayYamlPath, 'utf-8')
           const raw = yaml.load(content) as Record<string, unknown>
-          team = {
-            is_team: true,
+          project = {
+            is_agent: true,
             name: String(raw.name ?? ''),
             slug: String(raw.slug ?? ''),
             version: String(raw.version ?? ''),
           }
         } catch {
-          team = { is_team: true }
+          project = { is_agent: true }
         }
       } else {
-        team = { is_team: false }
+        project = { is_agent: false }
       }
 
       // 4. 출력
@@ -92,7 +92,7 @@ export function registerStatus(program: Command): void {
             global_commands: hasGlobal,
             local_commands: hasLocal,
           },
-          team,
+          project,
         }
         console.log(JSON.stringify(result))
       } else {
@@ -116,11 +116,11 @@ export function registerStatus(program: Command): void {
           console.log(`  \x1b[31m✗\x1b[0m 에이전트: 감지 안 됨`)
         }
 
-        // 팀
-        if (team?.is_team && team.name) {
-          console.log(`  \x1b[32m✓\x1b[0m 현재 팀: \x1b[36m${team.name}\x1b[0m v${team.version}`)
+        // 에이전트 프로젝트
+        if (project?.is_agent && project.name) {
+          console.log(`  \x1b[32m✓\x1b[0m 현재 에이전트: \x1b[36m${project.name}\x1b[0m v${project.version}`)
         } else {
-          console.log(`  \x1b[2m—\x1b[0m 현재 프로젝트: 팀 아님`)
+          console.log(`  \x1b[2m—\x1b[0m 현재 프로젝트: 에이전트 아님`)
         }
 
         console.log('')

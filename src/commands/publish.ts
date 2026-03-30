@@ -56,7 +56,7 @@ export interface Requires {
   mcp?: RequiresMcp[]
   npm?: (string | RequiresNpm)[]
   env?: RequiresEnv[]
-  teams?: string[]
+  agents?: string[]
   runtime?: { node?: string; python?: string }
   permissions?: string[]
 }
@@ -84,7 +84,7 @@ interface PublishMetadata {
   version: string
   changelog?: string
   requires?: Requires
-  visibility?: 'public' | 'gated' | 'private'
+  visibility?: 'public' | 'private' | 'internal'
   type?: 'command' | 'passive' | 'hybrid'
   cli_version?: string
   agent_names?: string[]
@@ -103,7 +103,7 @@ interface RelayYaml {
   tags: string[]
   long_description?: string
   requires?: Requires
-  visibility?: 'public' | 'gated' | 'private'
+  visibility?: 'public' | 'private' | 'internal'
   type?: 'command' | 'passive' | 'hybrid'
   source?: string
 }
@@ -119,8 +119,8 @@ function parseRelayYaml(content: string): RelayYaml {
 
   const rawVisibility = String(raw.visibility ?? '')
   const visibility: RelayYaml['visibility'] =
-    rawVisibility === 'private' ? 'private'
-    : rawVisibility === 'gated' ? 'gated'
+    rawVisibility === 'internal' ? 'internal'
+    : rawVisibility === 'private' ? 'private'
     : rawVisibility === 'public' ? 'public'
     : undefined
 
@@ -146,8 +146,8 @@ function parseRelayYaml(content: string): RelayYaml {
   }
 }
 
-function detectCommands(teamDir: string): CommandEntry[] {
-  const cmdDir = path.join(teamDir, 'commands')
+function detectCommands(agentDir: string): CommandEntry[] {
+  const cmdDir = path.join(agentDir, 'commands')
   if (!fs.existsSync(cmdDir)) return []
 
   const entries: CommandEntry[] = []
@@ -178,8 +178,8 @@ function detectCommands(teamDir: string): CommandEntry[] {
   return entries
 }
 
-function detectSkills(teamDir: string): SkillDetail[] {
-  const skillsDir = path.join(teamDir, 'skills')
+function detectSkills(agentDir: string): SkillDetail[] {
+  const skillsDir = path.join(agentDir, 'skills')
   if (!fs.existsSync(skillsDir)) return []
 
   const entries: SkillDetail[] = []
@@ -217,8 +217,8 @@ function detectSkills(teamDir: string): SkillDetail[] {
 
 const MCP_KEYWORDS = ['mcp', 'supabase', 'github', 'slack', 'notion', 'linear', 'jira', 'figma', 'stripe', 'openai', 'anthropic', 'postgres', 'mysql', 'redis', 'mongodb', 'firebase', 'aws', 'gcp', 'azure', 'vercel', 'netlify', 'docker', 'kubernetes']
 
-function detectAgentDetails(teamDir: string, requires?: Requires): AgentDetail[] {
-  const agentsDir = path.join(teamDir, 'agents')
+function detectAgentDetails(agentDir: string, requires?: Requires): AgentDetail[] {
+  const agentsDir = path.join(agentDir, 'agents')
   if (!fs.existsSync(agentsDir)) return []
 
   const mcpNames = new Set((requires?.mcp ?? []).map((m) => m.name.toLowerCase()))
@@ -274,8 +274,8 @@ function detectAgentDetails(teamDir: string, requires?: Requires): AgentDetail[]
 }
 
 /**
- * 팀 진입점 커맨드(commands/{author}-{name}.md)를 생성한다.
- * root SKILL.md를 대체하여 팀의 얼굴 역할을 한다.
+ * 에이전트 진입점 커맨드(commands/{author}-{name}.md)를 생성한다.
+ * root SKILL.md를 대체하여 에이전트의 얼굴 역할을 한다.
  */
 function generateEntryCommand(
   config: { slug: string; name: string; description: string; version: string },
@@ -295,7 +295,7 @@ function generateEntryCommand(
   lines.push(generatePreamble(scopedSlug))
   lines.push('')
 
-  // Team header
+  // Agent header
   lines.push(`## ${config.name}`)
   lines.push('')
   lines.push(`v${config.version} — ${scopedSlug}`)
@@ -329,14 +329,14 @@ function generateEntryCommand(
   return lines.join('\n')
 }
 
-function countDir(teamDir: string, dirName: string): number {
-  const dirPath = path.join(teamDir, dirName)
+function countDir(agentDir: string, dirName: string): number {
+  const dirPath = path.join(agentDir, dirName)
   if (!fs.existsSync(dirPath)) return 0
   return fs.readdirSync(dirPath).filter((f) => !f.startsWith('.')).length
 }
 
-function listDir(teamDir: string, dirName: string): string[] {
-  const dirPath = path.join(teamDir, dirName)
+function listDir(agentDir: string, dirName: string): string[] {
+  const dirPath = path.join(agentDir, dirName)
   if (!fs.existsSync(dirPath)) return []
   return fs.readdirSync(dirPath).filter((f) => !f.startsWith('.'))
 }
@@ -347,10 +347,10 @@ function listDir(teamDir: string, dirName: string): string[] {
  * 1. relay.yaml에 있으면 사용
  * 2. README.md가 있으면 fallback
  */
-function resolveLongDescription(teamDir: string, yamlValue?: string): string | undefined {
+function resolveLongDescription(agentDir: string, yamlValue?: string): string | undefined {
   if (yamlValue) return yamlValue
 
-  const readmePath = path.join(teamDir, 'README.md')
+  const readmePath = path.join(agentDir, 'README.md')
   if (fs.existsSync(readmePath)) {
     try {
       return fs.readFileSync(readmePath, 'utf-8').trim() || undefined
@@ -362,18 +362,18 @@ function resolveLongDescription(teamDir: string, yamlValue?: string): string | u
   return undefined
 }
 
-async function createTarball(teamDir: string): Promise<string> {
+async function createTarball(agentDir: string): Promise<string> {
   const tmpFile = path.join(os.tmpdir(), `relay-publish-${Date.now()}.tar.gz`)
 
   const dirsToInclude = VALID_DIRS.filter((d) =>
-    fs.existsSync(path.join(teamDir, d))
+    fs.existsSync(path.join(agentDir, d))
   )
 
   // Include root-level files if they exist
   const entries: string[] = [...dirsToInclude]
   const rootFiles = ['relay.yaml', 'SKILL.md', 'guide.md']
   for (const file of rootFiles) {
-    if (fs.existsSync(path.join(teamDir, file))) {
+    if (fs.existsSync(path.join(agentDir, file))) {
       entries.push(file)
     }
   }
@@ -382,7 +382,7 @@ async function createTarball(teamDir: string): Promise<string> {
     {
       gzip: true,
       file: tmpFile,
-      cwd: teamDir,
+      cwd: agentDir,
     },
     entries
   )
@@ -435,14 +435,14 @@ async function publishToApi(
 export function registerPublish(program: Command): void {
   program
     .command('publish')
-    .description('현재 팀 패키지를 Space에 배포합니다 (relay.yaml 필요)')
+    .description('현재 에이전트 패키지를 Space에 배포합니다 (relay.yaml 필요)')
     .option('--token <token>', '인증 토큰')
     .option('--space <slug>', '배포할 Space 지정')
     .option('--version <version>', '배포 버전 지정 (relay.yaml 업데이트)')
     .action(async (opts: { token?: string; space?: string; version?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const teamDir = process.cwd()
-      const relayDir = path.join(teamDir, '.relay')
+      const agentDir = process.cwd()
+      const relayDir = path.join(agentDir, '.relay')
       const relayYamlPath = path.join(relayDir, 'relay.yaml')
       const isTTY = Boolean(process.stdin.isTTY) && !json
 
@@ -485,14 +485,14 @@ export function registerPublish(program: Command): void {
         const { input: promptInput, select: promptSelect } =
           await import('@inquirer/prompts')
 
-        const dirName = path.basename(teamDir)
+        const dirName = path.basename(agentDir)
         const defaultSlug = dirName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
-        console.error('\n\x1b[36m릴레이 팀 패키지를 초기화합니다.\x1b[0m')
+        console.error('\n\x1b[36m릴레이 에이전트 패키지를 초기화합니다.\x1b[0m')
         console.error('.relay/relay.yaml을 생성하기 위해 몇 가지 정보를 입력해주세요.\n')
 
         const name = await promptInput({
-          message: '팀 이름:',
+          message: '에이전트 이름:',
           default: dirName,
         })
 
@@ -502,7 +502,7 @@ export function registerPublish(program: Command): void {
         })
 
         const description = await promptInput({
-          message: '팀 설명 (필수):',
+          message: '에이전트 설명 (필수):',
           validate: (v) => v.trim().length > 0 ? true : '설명을 입력해주세요.',
         })
 
@@ -511,20 +511,20 @@ export function registerPublish(program: Command): void {
           default: '',
         })
 
-        const visibility = await promptSelect<'public' | 'gated' | 'private'>({
+        const visibility = await promptSelect<'public' | 'private' | 'internal'>({
           message: '공개 범위:',
           choices: [
             { name: '공개 — 누구나 설치', value: 'public' },
-            { name: '링크 공유 — 접근 링크가 있는 사람만 설치', value: 'gated' },
-            { name: '비공개 — Space 멤버만', value: 'private' },
+            { name: '링크 공유 — 접근 링크가 있는 사람만 설치', value: 'private' },
+            { name: '비공개 — Org 멤버만', value: 'internal' },
           ],
         })
 
         console.error('\n\x1b[2m💡 프로필에 연락처를 설정하면 설치 시 명함이 전달됩니다: www.relayax.com/dashboard/profile\x1b[0m')
-        if (visibility === 'gated') {
-          console.error('\x1b[2m💡 링크 공유 팀은 웹 대시보드에서 접근 링크와 구매 안내를 설정하세요: www.relayax.com/dashboard\x1b[0m')
-        } else if (visibility === 'private') {
-          console.error('\x1b[2m💡 비공개 팀은 Space를 통해 멤버를 관리하세요: www.relayax.com/dashboard/teams\x1b[0m')
+        if (visibility === 'private') {
+          console.error('\x1b[2m💡 링크 공유 에이전트는 웹 대시보드에서 접근 링크와 구매 안내를 설정하세요: www.relayax.com/dashboard\x1b[0m')
+        } else if (visibility === 'internal') {
+          console.error('\x1b[2m💡 비공개 에이전트는 Org를 통해 멤버를 관리하세요: www.relayax.com/dashboard/agents\x1b[0m')
         }
         console.error('')
 
@@ -696,7 +696,7 @@ export function registerPublish(program: Command): void {
           const { select: promptSelect } = await import('@inquirer/prompts')
           console.error(`\n\x1b[33m⚠ relay.yaml에 visibility가 설정되지 않았습니다.\x1b[0m  (기본값: ${defaultVisibility === 'public' ? '공개' : '비공개'})`)
 
-          config.visibility = await promptSelect<'public' | 'gated' | 'private'>({
+          config.visibility = await promptSelect<'public' | 'private' | 'internal'>({
             message: '공개 범위를 선택하세요:',
             choices: [
               {
@@ -705,11 +705,11 @@ export function registerPublish(program: Command): void {
               },
               {
                 name: '링크 공유 — 접근 링크가 있는 사람만 설치',
-                value: 'gated',
+                value: 'private',
               },
               {
-                name: `비공개 — Space 멤버만 접근`,
-                value: 'private',
+                name: `비공개 — Org 멤버만 접근`,
+                value: 'internal',
               },
             ],
             default: defaultVisibility,
@@ -725,8 +725,8 @@ export function registerPublish(program: Command): void {
             message: 'relay.yaml에 visibility를 설정해주세요.',
             options: [
               { value: 'public', label: '공개 — 누구나 설치' },
-              { value: 'gated', label: '링크 공유 — 접근 링크가 있는 사람만 설치' },
-              { value: 'private', label: '비공개 — Space 멤버만 접근' },
+              { value: 'private', label: '링크 공유 — 접근 링크가 있는 사람만 설치' },
+              { value: 'internal', label: '비공개 — Org 멤버만 접근' },
             ],
             fix: 'relay.yaml의 visibility 필드를 위 옵션 중 하나로 설정하세요.',
           }))
@@ -739,12 +739,12 @@ export function registerPublish(program: Command): void {
         const { select: promptConfirmVis } = await import('@inquirer/prompts')
         const visLabelMap: Record<string, string> = {
           public: '공개',
-          gated: '링크공유',
-          private: '비공개',
+          private: '링크공유',
+          internal: '비공개',
         }
         const currentVisLabel = visLabelMap[config.visibility ?? 'public'] ?? config.visibility
 
-        const newVisibility = await promptConfirmVis<'public' | 'gated' | 'private'>({
+        const newVisibility = await promptConfirmVis<'public' | 'private' | 'internal'>({
           message: `공개 범위: ${currentVisLabel} — 유지하거나 변경하세요`,
           choices: [
             {
@@ -753,11 +753,11 @@ export function registerPublish(program: Command): void {
             },
             {
               name: '링크공유 — 접근 링크가 있는 사람만 설치',
-              value: 'gated',
+              value: 'private',
             },
             {
-              name: `비공개 — Space 멤버만 접근`,
-              value: 'private',
+              name: `비공개 — Org 멤버만 접근`,
+              value: 'internal',
             },
           ],
           default: config.visibility ?? defaultVisibility,
@@ -818,7 +818,7 @@ export function registerPublish(program: Command): void {
       // GUIDE.html deprecation warning
       if (fs.existsSync(path.join(relayDir, 'GUIDE.html'))) {
         console.error('\x1b[33m⚠ GUIDE.html은 더 이상 지원되지 않습니다. 상세페이지가 가이드 역할을 합니다.\x1b[0m')
-        console.error('  long_description을 활용하거나 relayax.com에서 팀 정보를 편집하세요.\n')
+        console.error('  long_description을 활용하거나 relayax.com에서 에이전트 정보를 편집하세요.\n')
       }
 
       // Generate guide.md (consumer install guide)
@@ -906,7 +906,10 @@ export function registerPublish(program: Command): void {
           // Show shareable onboarding guide as a plain copyable block
           if (isTTY) {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
-            const guideUrl = `https://relayax.com/api/registry/${detailSlug}/guide.md`
+            const accessCode = (result as Record<string, unknown>).access_code as string | null
+            const guideUrl = accessCode
+              ? `https://relayax.com/api/registry/${detailSlug}/guide.md?code=${accessCode}`
+              : `https://relayax.com/api/registry/${detailSlug}/guide.md`
 
             console.log(`\n  \x1b[90m주변인에게 공유하세요:\x1b[0m\n`)
             console.log('```')
@@ -917,9 +920,13 @@ export function registerPublish(program: Command): void {
             console.log(`\n  \x1b[90mCLI 설치된 사용자용 (짧은 버전):\x1b[0m`)
             console.log(`  /relay:relay-install ${result.slug}`)
 
-            if (config.visibility !== 'private') {
+            if (config.visibility === 'private') {
+              console.log(`\n  \x1b[90mprivate 에이전트:\x1b[0m`)
+              console.log(`  접근 링크를 생성한 뒤 guide.md?code={agent_code}로 공유하세요.`)
+              console.log(`  접근 링크 관리: \x1b[36mrelayax.com/dashboard/agent-access/${config.slug}\x1b[0m`)
+            } else if (config.visibility !== 'internal') {
               console.log(`\n  \x1b[90m유료 판매하려면:\x1b[0m`)
-              console.log(`  1. 가시성을 "링크 공유"로 변경: \x1b[36mrelayax.com/dashboard\x1b[0m`)
+              console.log(`  1. 가시성을 "private"로 변경: \x1b[36mrelayax.com/dashboard\x1b[0m`)
               console.log(`  2. API 키 발급: \x1b[36mrelayax.com/dashboard/keys\x1b[0m`)
               console.log(`  3. 웹훅 연동 가이드: \x1b[36mrelayax.com/docs/webhook-guide.md\x1b[0m`)
             }

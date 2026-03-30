@@ -1,35 +1,35 @@
 import { Command } from 'commander'
 import { loadMergedInstalled, getValidToken, API_URL } from '../lib/config.js'
-import type { InstalledTeam } from '../types.js'
+import type { InstalledAgent } from '../types.js'
 
-interface OrgTeamEntry {
+interface OrgAgentEntry {
   slug: string
   name: string
   description?: string | null
   owner: string
 }
 
-async function fetchOrgTeamList(orgSlug: string, token: string): Promise<OrgTeamEntry[]> {
-  const res = await fetch(`${API_URL}/api/orgs/${orgSlug}/teams`, {
+async function fetchOrgAgentList(orgSlug: string, token: string): Promise<OrgAgentEntry[]> {
+  const res = await fetch(`${API_URL}/api/orgs/${orgSlug}/agents`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(8000),
   })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`Org 팀 목록 조회 실패 (${res.status}): ${body}`)
+    throw new Error(`Org 에이전트 목록 조회 실패 (${res.status}): ${body}`)
   }
-  return (await res.json()) as OrgTeamEntry[]
+  return (await res.json()) as OrgAgentEntry[]
 }
 
 export function registerList(program: Command): void {
   program
     .command('list')
-    .description('설치된 에이전트 팀 목록')
-    .option('--org <slug>', 'Organization 팀 목록 조회')
+    .description('설치된 에이전트 목록')
+    .option('--org <slug>', 'Organization 에이전트 목록 조회')
     .action(async (opts: { org?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
-      // --org 옵션: Org 팀 목록
+      // --org 옵션: Org 에이전트 목록
       if (opts.org) {
         const orgSlug = opts.org
 
@@ -45,26 +45,26 @@ export function registerList(program: Command): void {
         }
 
         try {
-          const teams = await fetchOrgTeamList(orgSlug, token)
+          const agents = await fetchOrgAgentList(orgSlug, token)
 
           if (json) {
-            console.log(JSON.stringify({ org: orgSlug, teams }))
+            console.log(JSON.stringify({ org: orgSlug, agents }))
             return
           }
 
-          if (teams.length === 0) {
-            console.log(`\n@${orgSlug} Organization에 팀이 없습니다.`)
+          if (agents.length === 0) {
+            console.log(`\n@${orgSlug} Organization에 에이전트가 없습니다.`)
             return
           }
 
-          console.log(`\n\x1b[1m@${orgSlug} 팀 목록\x1b[0m (${teams.length}개):\n`)
-          for (const t of teams) {
+          console.log(`\n\x1b[1m@${orgSlug} 에이전트 목록\x1b[0m (${agents.length}개):\n`)
+          for (const t of agents) {
             const desc = t.description
               ? `  \x1b[90m${t.description.length > 50 ? t.description.slice(0, 50) + '...' : t.description}\x1b[0m`
               : ''
             console.log(`  \x1b[36m@${t.owner}/${t.slug}\x1b[0m  \x1b[1m${t.name}\x1b[0m${desc}`)
           }
-          console.log(`\n\x1b[33m  설치: relay install @${orgSlug}/<팀슬러그>\x1b[0m`)
+          console.log(`\n\x1b[33m  설치: relay install @${orgSlug}/<에이전트슬러그>\x1b[0m`)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           if (json) {
@@ -93,7 +93,7 @@ export function registerList(program: Command): void {
       const seen = new Set<string>()
 
       // 글로벌 먼저
-      for (const [slug, info] of Object.entries(globalInstalled) as [string, InstalledTeam][]) {
+      for (const [slug, info] of Object.entries(globalInstalled) as [string, InstalledAgent][]) {
         allEntries.push({
           slug,
           version: info.version,
@@ -106,7 +106,7 @@ export function registerList(program: Command): void {
       }
 
       // 로컬 (글로벌과 중복되지 않는 것만)
-      for (const [slug, info] of Object.entries(localInstalled) as [string, InstalledTeam][]) {
+      for (const [slug, info] of Object.entries(localInstalled) as [string, InstalledAgent][]) {
         if (seen.has(slug)) continue
         allEntries.push({
           slug,
@@ -122,10 +122,10 @@ export function registerList(program: Command): void {
         console.log(JSON.stringify({ installed: allEntries }))
       } else {
         if (allEntries.length === 0) {
-          console.log('\n설치된 팀이 없습니다. `relay install <slug>`로 설치하세요.')
+          console.log('\n설치된 에이전트가 없습니다. `relay install <slug>`로 설치하세요.')
           return
         }
-        console.log(`\n설치된 팀 (${allEntries.length}개):\n`)
+        console.log(`\n설치된 에이전트 (${allEntries.length}개):\n`)
         for (const item of allEntries) {
           const date = new Date(item.installed_at).toLocaleDateString('ko-KR')
           const scopeLabel = item.deploy_scope === 'global'
