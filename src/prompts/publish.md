@@ -28,6 +28,13 @@
 
 #### A. 최초 배포 (.relay/relay.yaml이 없음)
 
+**환경 B (MCP)의 경우:**
+`relay_package` MCP tool (`mode: "init"`)을 사용합니다. CLI의 `relay package --init --json`과 동일한 결과를 반환합니다.
+- 결과의 `sources[]`는 배포할 콘텐츠 **후보** 목록입니다. 전부 배포 대상이 아닙니다.
+- 사용자에게 어떤 콘텐츠를 패키지에 포함할지 반드시 물어보세요.
+
+**환경 A (터미널)의 경우:**
+
 ##### 1단계: 소스 탐색
 
 `relay package --init --json` 실행
@@ -172,6 +179,14 @@ contents:
 
 #### B. 재배포 (.relay/relay.yaml이 있음)
 
+**환경 B (MCP)의 경우:**
+`relay_package` MCP tool을 사용합니다:
+- `mode: "migrate"` — B-0 마이그레이션 (source → contents)
+- `mode: "sync"` — B-1~B-2 동기화 + 변경 반영
+- sync 결과의 `new_items`가 있으면 B-3 새 콘텐츠 추가도 진행합니다.
+
+**환경 A (터미널)의 경우:**
+
 ##### B-0. 기존 source 필드 마이그레이션
 
 relay.yaml에 기존 `source` 필드만 있고 `contents`가 없으면:
@@ -300,18 +315,19 @@ relay.yaml의 `visibility` 설정을 확인합니다.
 
 Org가 선택된 경우:
 - **사용자 질문 도구 호출:**
-  - question: "공개 범위를 선택하세요"
-  - options: `["공개 — 누구나 설치", "링크 공유 — 접근 링크가 있는 사람만 설치", "비공개 — Org 멤버만"]`
+  - question: "{org_name} Organization에 배포합니다. 공개 범위를 선택하세요"
+  - options: `["public — 외부인 포함 누구나 설치", "internal — 조직 구성원 누구나 설치", "private — 조직 내에서도 허가받은 사람만 설치"]`
 
-Org가 없는 경우:
+Org가 없는 경우 (개인 배포):
 - **사용자 질문 도구 호출:**
   - question: "공개 범위를 선택하세요"
-  - options: `["공개 — 누구나 설치", "링크 공유 — 접근 링크가 있는 사람만 설치"]`
+  - options: `["public — 누구나 검색하여 설치 가능", "private — 접근 링크를 받은 사람만 설치 가능"]`
 
 **응답 처리:**
-- "공개" → relay.yaml에 `visibility: public` 저장
-- "링크 공유" → relay.yaml에 `visibility: private` 저장. 배포 후 웹 대시보드(/dashboard)에서 접근 링크를 생성하고 구매 안내를 설정할 수 있다고 안내.
-- "비공개" → relay.yaml에 `visibility: internal`, `org: <selected_slug>` 저장
+
+- "public" → relay.yaml에 `visibility: public` 저장
+- "internal" → relay.yaml에 `visibility: internal` 저장
+- "private" → relay.yaml에 `visibility: private` 저장. 배포 후 웹 대시보드에서 접근 코드를 생성하여 공유할 수 있다고 안내.
 
 **재배포 (visibility 이미 설정됨):**
 

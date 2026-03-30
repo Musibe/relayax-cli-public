@@ -298,6 +298,118 @@ export function createMcpServer(): McpServer {
     return { content: [jsonText({ sources })] }
   })
 
+  server.tool('relay_package', '소스 디렉토리에서 .relay/로 콘텐츠를 패키징합니다. mode: init(최초 소스 탐색), sync(변경 반영), migrate(source→contents 마이그레이션)', {
+    mode: z.enum(['init', 'sync', 'migrate']).describe('패키징 모드'),
+    project_path: z.string().optional().describe('프로젝트 경로'),
+  }, async ({ mode, project_path }) => {
+    try {
+      const projectPath = resolveMcpProjectPath(project_path)
+      const homeDir = resolveHome()
+      const relayDir = path.join(projectPath, '.relay')
+      const relayYamlPath = path.join(relayDir, 'relay.yaml')
+
+      if (mode === 'init') {
+        // 최초 패키징: 소스 탐색
+        const { detectGlobalCLIs } = await import('../lib/ai-tools.js')
+        const localTools = detectAgentCLIs(projectPath)
+        const globalTools = detectGlobalCLIs(homeDir)
+
+        interface SourceEntry { path: string; location: string; name: string; items: { name: string; type: string; relativePath: string }[] }
+        const sources: SourceEntry[] = []
+
+        for (const tool of localTools) {
+          const items = scanLocalItems(projectPath, tool)
+          if (items.length > 0) sources.push({ path: tool.skillsDir, location: 'local', name: tool.name, items: items.map((i) => ({ name: i.name, type: i.type, relativePath: i.relativePath })) })
+        }
+        for (const tool of globalTools) {
+          const items = scanGlobalItems(tool, homeDir)
+          if (items.length > 0) sources.push({ path: `~/${tool.skillsDir}`, location: 'global', name: `${tool.name} (global)`, items: items.map((i) => ({ name: i.name, type: i.type, relativePath: i.relativePath })) })
+        }
+        for (const { tool, basePath } of detectMountedCLIs()) {
+          const items = scanMountedItems(basePath, tool)
+          if (items.length > 0) sources.push({ path: `${basePath}/${tool.skillsDir}`, location: 'mounted', name: `${tool.name} (mounted)`, items: items.map((i) => ({ name: i.name, type: i.type, relativePath: i.relativePath })) })
+        }
+
+        // 기존 글로벌 에이전트 패키지 스캔
+        const globalAgentsDir = path.join(homeDir, '.relay', 'agents')
+        const existingAgents: { slug: string; name: string; version: string; path: string }[] = []
+        if (fs.existsSync(globalAgentsDir)) {
+          for (const entry of fs.readdirSync(globalAgentsDir, { withFileTypes: true })) {
+            if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+            const agentYaml = path.join(globalAgentsDir, entry.name, 'relay.yaml')
+            if (fs.existsSync(agentYaml)) {
+              try {
+                const cfg = yaml.load(fs.readFileSync(agentYaml, 'utf-8')) as Record<string, unknown>
+                existingAgents.push({ slug: (cfg.slug as string) ?? entry.name, name: (cfg.name as string) ?? entry.name, version: (cfg.version as string) ?? '0.0.0', path: `~/.relay/agents/${entry.name}` })
+              } catch { /* skip */ }
+            }
+          }
+        }
+
+        return { content: [jsonText({ status: 'init_required', sources, existing_agents: existingAgents })] }
+      }
+
+      // sync / migrate는 relay.yaml이 필요
+      if (!fs.existsSync(relayYamlPath)) {
+        return { content: [jsonText({ error: 'NOT_INITIALIZED', message: '.relay/relay.yaml이 없습니다. mode: init으로 먼저 실행하세요.' })], isError: true }
+      }
+
+      if (mode === 'migrate') {
+        const yamlMigrate = fs.readFileSync(relayYamlPath, 'utf-8')
+        const cfgMigrate = yaml.load(yamlMigrate) as Record<string, unknown>
+        if (cfgMigrate.contents) {
+          return { content: [jsonText({ status: 'already_migrated', message: '이미 contents 형식입니다.' })] }
+        }
+        const legacySource = cfgMigrate.source as string | undefined
+        if (!legacySource) {
+          return { content: [jsonText({ status: 'no_source', message: 'source 필드가 없습니다.' })], isError: true }
+        }
+
+        const localTools = detectAgentCLIs(projectPath)
+        const tool = localTools.find((t) => t.skillsDir === legacySource)
+        const migratedContents: { name: string; type: string; from: string }[] = []
+        if (tool) {
+          const items = scanLocalItems(projectPath, tool)
+          for (const item of items) {
+            migratedContents.push({ name: item.name, type: item.type, from: `${legacySource}/${item.relativePath}` })
+          }
+        }
+        delete cfgMigrate.source
+        cfgMigrate.contents = migratedContents
+        fs.writeFileSync(relayYamlPath, yaml.dump(cfgMigrate, { lineWidth: 120 }), 'utf-8')
+        return { content: [jsonText({ status: 'migrated', contents: migratedContents })] }
+      }
+
+      // mode === 'sync'
+      const { computeContentsDiff, syncContentsToRelay } = await import('../commands/package.js')
+      const yamlContent = fs.readFileSync(relayYamlPath, 'utf-8')
+      const config = yaml.load(yamlContent) as Record<string, unknown>
+      const contents = (config.contents as unknown[]) ?? []
+
+      if (contents.length === 0) {
+        return { content: [jsonText({ status: 'no_contents', message: 'relay.yaml에 contents가 없습니다.' })], isError: true }
+      }
+
+      const { diff: contentsDiff, newItems } = computeContentsDiff(contents as any, relayDir, projectPath)
+      const hasChanges = contentsDiff.some((d: any) => d.status === 'modified')
+
+      if (hasChanges) {
+        syncContentsToRelay(contents as any, contentsDiff as any, relayDir, projectPath)
+      }
+
+      const summary = {
+        modified: contentsDiff.filter((d: any) => d.status === 'modified').length,
+        unchanged: contentsDiff.filter((d: any) => d.status === 'unchanged').length,
+        source_missing: contentsDiff.filter((d: any) => d.status === 'source_missing').length,
+        new_available: newItems.length,
+      }
+
+      return { content: [jsonText({ diff: contentsDiff, new_items: newItems, synced: hasChanges, summary })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
   server.tool('relay_org_list', '소속 Organization 목록을 조회합니다', {}, async () => {
     try {
       const token = await getValidToken()

@@ -177,7 +177,7 @@ function scanPath(absPath: string): FileEntry[] {
 /**
  * contents 매니페스트 기반으로 각 항목의 원본과 .relay/ 복사본을 비교한다.
  */
-function computeContentsDiff(
+export function computeContentsDiff(
   contents: ContentEntry[],
   relayDir: string,
   projectPath: string,
@@ -281,7 +281,7 @@ function discoverNewItems(contents: ContentEntry[], projectPath: string): NewIte
 /**
  * contents 항목 단위로 from → .relay/ 동기화한다.
  */
-function syncContentsToRelay(
+export function syncContentsToRelay(
   contents: ContentEntry[],
   contentsDiff: ContentDiffEntry[],
   relayDir: string,

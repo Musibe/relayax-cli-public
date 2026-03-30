@@ -59,6 +59,9 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null
 | "relay install X" | `relay install X` | `relay_install` tool 호출 (`slug: "X"`) |
 | "relay publish" | `relay publish` | `relay_publish` tool 호출 |
 | "relay login" | `relay login` | `relay_login` tool 호출 |
+| "relay package --init" | `relay package --init --json` | `relay_package` tool 호출 (`mode: "init"`) |
+| "relay package --sync" | `relay package --sync --json` | `relay_package` tool 호출 (`mode: "sync"`) |
+| "relay package --migrate" | `relay package --migrate --json` | `relay_package` tool 호출 (`mode: "migrate"`) |
 | "relay scan" | `relay package --init` | `relay_scan` tool 호출 |
 | "relay check-update X" | `relay check-update X` | `relay_check_update` tool 호출 (`slug: "X"`) |
 | "relay orgs list" | `relay orgs list --json` | `relay_org_list` tool 호출 |
