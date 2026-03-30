@@ -1,5 +1,3 @@
-## Organization 생성
-
 먼저 Organization이 있는지 확인합니다:
 
 ```bash
