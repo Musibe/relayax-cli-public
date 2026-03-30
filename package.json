@@ -1,0 +1,47 @@
+{
+  "name": "relayax-cli",
+  "version": "0.3.41",
+  "description": "RelayAX Agent Team Marketplace CLI - Install and manage agent teams",
+  "main": "dist/index.js",
+  "bin": {
+    "relay": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "agent",
+    "skills",
+    "marketplace",
+    "cli",
+    "claude",
+    "llm",
+    "ai-agent",
+    "relayax"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Musibe/relayax-cli-public"
+  },
+  "homepage": "https://relayax.com",
+  "dependencies": {
+    "@inquirer/prompts": "^8.3.2",
+    "commander": "^13.1.0",
+    "form-data": "^4.0.5",
+    "js-yaml": "^4.1.1",
+    "tar": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}
