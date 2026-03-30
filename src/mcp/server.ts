@@ -9,10 +9,9 @@ import { detectAgentCLIs, detectMountedCLIs, scanLocalItems, scanGlobalItems, sc
 import { injectPreambleToAgent } from '../lib/preamble.js'
 import { uninstallAgent } from '../lib/installer.js'
 import { resolveProjectPath, resolveHome } from '../lib/paths.js'
-import { INSTALL_PROMPT, PUBLISH_PROMPT } from '../prompts/index.js'
+// prompts are used in MCP Prompt definitions below
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
 import yaml from 'js-yaml'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -198,81 +197,65 @@ export function createMcpServer(): McpServer {
     return { content: [jsonText({ sources })] }
   })
 
-  server.tool('relay_publish', '에이전트를 마켓플레이스에 배포합니다', {
-    project_path: z.string().optional().describe('프로젝트 경로'),
+  server.tool('relay_publish', '에이전트를 마켓플레이스에 배포합니다 (.relay/ 디렉토리를 tar로 패키징하여 업로드)', {
+    project_path: z.string().optional().describe('프로젝트 경로 (.relay/relay.yaml이 있는 디렉토리)'),
   }, async ({ project_path }) => {
-    const projectPath = project_path ?? resolveProjectPath()
-    const relayYaml = path.join(projectPath, '.relay', 'relay.yaml')
+    try {
+      const projectPath = project_path ?? resolveProjectPath()
+      const relayDir = path.join(projectPath, '.relay')
+      const relayYaml = path.join(relayDir, 'relay.yaml')
 
-    if (!fs.existsSync(relayYaml)) {
-      return { content: [jsonText({ error: 'NOT_INITIALIZED', message: '.relay/relay.yaml이 없습니다. relay-publish 프롬프트를 사용하여 프로젝트를 먼저 설정하세요.' })], isError: true }
+      if (!fs.existsSync(relayYaml)) {
+        return { content: [jsonText({ error: 'NOT_INITIALIZED', message: '.relay/relay.yaml이 없습니다.' })], isError: true }
+      }
+
+      const token = await getValidToken()
+      if (!token) {
+        return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '배포하려면 로그인이 필요합니다.' })], isError: true }
+      }
+
+      const cfg = yaml.load(fs.readFileSync(relayYaml, 'utf-8')) as Record<string, unknown>
+      const { createTarball, publishToApi } = await import('../commands/publish.js')
+
+      const tarPath = await createTarball(relayDir)
+      try {
+        const metadata = {
+          slug: cfg.slug as string,
+          name: cfg.name as string,
+          description: (cfg.description as string) ?? '',
+          tags: (cfg.tags as string[]) ?? [],
+          commands: [],
+          components: { skills: 0, agents: 0, rules: 0, commands: 0 },
+          version: cfg.version as string,
+          visibility: (cfg.visibility as 'public' | 'private' | 'internal') ?? 'public',
+          cli_version: pkg.version,
+        }
+
+        const result = await publishToApi(token, tarPath, metadata)
+        return { content: [jsonText(result)] }
+      } finally {
+        fs.unlinkSync(tarPath)
+      }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
     }
-
-    const token = await getValidToken()
-    if (!token) {
-      return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '배포하려면 로그인이 필요합니다.' })], isError: true }
-    }
-
-    const cfg = yaml.load(fs.readFileSync(relayYaml, 'utf-8')) as Record<string, unknown>
-    return { content: [jsonText({ status: 'ready', project_path: projectPath, name: cfg.name, slug: cfg.slug, version: cfg.version, message: '배포 준비 완료. relay-publish 프롬프트로 전체 워크플로우를 실행하세요.' })] }
   })
 
-  // ═══ Prompts ═══
+  // ═══ relay_init — slash command 설치 ═══
 
-  server.prompt('relay-install', '에이전트 검색 → 설치 가이드 워크플로우', {}, () => ({
-    messages: [{
-      role: 'user',
-      content: { type: 'text', text: `다음 가이드를 따라 에이전트를 설치하세요. relay MCP tool을 사용하여 각 단계를 실행합니다.
-
-사용 가능한 tool: relay_status, relay_search, relay_install, relay_list, relay_status
-
-## 워크플로우
-
-1. relay_status로 로그인 상태 확인. 미인증이면 사용자에게 터미널에서 \`npx relayax-cli login --device\` 실행을 안내.
-2. 사용자에게 어떤 에이전트를 찾는지 물어보기.
-3. relay_search로 검색.
-4. 검색 결과를 보여주고 선택하게 하기.
-5. relay_install로 설치.
-6. 설치 결과와 사용법 안내.` },
-    }],
-  }))
-
-  server.prompt('relay-publish', '에이전트 배포 가이드 워크플로우', {}, () => ({
-    messages: [{
-      role: 'user',
-      content: { type: 'text', text: `다음 가이드를 따라 에이전트를 배포하세요. relay MCP tool을 사용합니다.
-
-사용 가능한 tool: relay_status, relay_scan, relay_status, relay_publish
-
-## 워크플로우
-
-1. relay_status로 로그인 상태 확인. 미인증이면 터미널에서 \`npx relayax-cli login --device\` 안내.
-2. relay_scan으로 배포 가능한 스킬/에이전트/커맨드 목록 스캔.
-3. 스캔 결과를 보여주고 사용자에게 어떤 항목을 배포할지 선택하게 하기.
-4. relay_status로 프로젝트 상태 확인. .relay/relay.yaml이 없으면 프로젝트 생성 안내.
-5. relay_publish로 배포.
-6. 배포 결과를 사용자에게 보여주기.` },
-    }],
-  }))
-
-  server.prompt('relay-status', '환경 상태 확인', {}, () => ({
-    messages: [{
-      role: 'user',
-      content: { type: 'text', text: 'relay_status, relay_status, relay_list, relay_scan tool을 사용하여 현재 relay 환경 상태를 확인하고 사용자에게 보여주세요. 로그인 상태, 감지된 AI 도구, 프로젝트 정보, 설치된 에이전트, 배포 가능한 스킬 목록을 포함합니다.' },
-    }],
-  }))
-
-  server.prompt('relay-uninstall', '에이전트 제거 가이드', {}, () => ({
-    messages: [{
-      role: 'user',
-      content: { type: 'text', text: `다음 워크플로우를 따라 에이전트를 제거하세요:
-
-1. relay_list로 설치된 에이전트 목록 표시.
-2. 사용자에게 제거할 에이전트 선택하게 하기.
-3. relay_uninstall로 제거.
-4. 결과 보여주기.` },
-    }],
-  }))
+  server.tool('relay_init', 'relay slash command를 설치합니다 (/relay-install, /relay-publish 등)', {}, async () => {
+    try {
+      const { installGlobalUserCommands, hasGlobalUserCommands } = await import('../commands/init.js')
+      if (hasGlobalUserCommands()) {
+        installGlobalUserCommands() // 업데이트
+        return { content: [jsonText({ status: 'updated', message: 'relay slash command가 업데이트되었습니다.' })] }
+      }
+      installGlobalUserCommands()
+      return { content: [jsonText({ status: 'installed', message: 'relay slash command가 설치되었습니다. /relay-install, /relay-publish 등을 사용할 수 있습니다.' })] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
 
   return server
 }

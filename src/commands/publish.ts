@@ -73,7 +73,7 @@ interface SkillDetail {
   uses: string[]
 }
 
-interface PublishMetadata {
+export interface PublishMetadata {
   slug: string
   name: string
   description: string
@@ -362,7 +362,7 @@ function resolveLongDescription(agentDir: string, yamlValue?: string): string | 
   return undefined
 }
 
-async function createTarball(agentDir: string): Promise<string> {
+export async function createTarball(agentDir: string): Promise<string> {
   const tmpFile = path.join(os.tmpdir(), `relay-publish-${Date.now()}.tar.gz`)
 
   const dirsToInclude = VALID_DIRS.filter((d) =>
@@ -403,7 +403,7 @@ interface PublishResult {
   } | null
 }
 
-async function publishToApi(
+export async function publishToApi(
   token: string,
   tarPath: string,
   metadata: PublishMetadata,

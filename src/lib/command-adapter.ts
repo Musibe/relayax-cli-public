@@ -3,6 +3,37 @@ import path from 'path'
 import type { AITool } from './ai-tools.js'
 import { INSTALL_PROMPT, PUBLISH_PROMPT, ERROR_HANDLING_GUIDE } from '../prompts/index.js'
 
+/**
+ * 환경 감지 프리앰블.
+ * slash command 실행 시 MCP tool 사용 가능 여부를 먼저 판별하여,
+ * 이후 모든 CLI 명령어를 적절한 방식으로 실행하도록 안내.
+ */
+const ENV_PREAMBLE = `## 환경 감지
+
+이 커맨드를 실행하기 전에 환경을 판별하세요:
+
+1. **relay MCP tool 사용 가능 여부 확인**: relay_status 같은 relay MCP tool을 호출할 수 있는지 확인하세요.
+   - 사용 가능 → **MCP 모드**로 실행 (아래 표 참고)
+   - 사용 불가 → **CLI 모드**로 실행 (bash 명령어 그대로 사용)
+
+2. MCP 모드에서의 명령어 변환:
+
+| CLI 명령어 | MCP tool |
+|---|---|
+| \`relay status\` | \`relay_status\` tool 호출 |
+| \`relay list --json\` | \`relay_list\` tool 호출 |
+| \`relay search <keyword>\` | \`relay_search\` tool 호출 |
+| \`relay install <slug>\` | \`relay_install\` tool 호출 |
+| \`relay uninstall <slug>\` | \`relay_uninstall\` tool 호출 |
+| \`relay package --init\` | \`relay_scan\` tool 호출 |
+| \`relay publish\` | \`relay_publish\` tool 호출 |
+
+**중요**: 이후 지시에서 \`relay <명령어>\`로 표기된 것은 판별된 환경에 따라 변환하여 실행하세요.
+
+---
+
+`
+
 export interface CommandContent {
   id: string
   description: string
@@ -76,12 +107,12 @@ export const USER_COMMANDS: CommandContent[] = [
   {
     id: 'relay-install',
     description: 'relay에서 에이전트를 설치합니다',
-    body: INSTALL_PROMPT,
+    body: ENV_PREAMBLE + INSTALL_PROMPT,
   },
   {
     id: 'relay-status',
     description: '설치된 에이전트와 Organization 현황을 확인합니다',
-    body: `현재 설치된 에이전트와 소속 Organization 현황을 한눈에 보여줍니다.
+    body: ENV_PREAMBLE + `현재 설치된 에이전트와 소속 Organization 현황을 한눈에 보여줍니다.
 
 ## 실행 방법
 
@@ -170,7 +201,7 @@ ${ERROR_HANDLING_GUIDE}
   {
     id: 'relay-uninstall',
     description: '설치된 에이전트를 삭제합니다',
-    body: `설치된 에이전트를 제거합니다. CLI가 패키지와 배치된 파일을 모두 정리합니다.
+    body: ENV_PREAMBLE + `설치된 에이전트를 제거합니다. CLI가 패키지와 배치된 파일을 모두 정리합니다.
 
 ## 실행 방법
 
@@ -191,7 +222,7 @@ ${ERROR_HANDLING_GUIDE}
   {
     id: 'relay-publish',
     description: '현재 에이전트 패키지를 relay에 배포합니다',
-    body: PUBLISH_PROMPT,
+    body: ENV_PREAMBLE + PUBLISH_PROMPT,
   },
 ]
 
