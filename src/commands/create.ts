@@ -155,6 +155,7 @@ export function registerCreate(program: Command): void {
         type: 'hybrid',
         tags,
         visibility,
+        contents: [],
       }
       fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
 

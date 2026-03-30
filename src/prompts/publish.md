@@ -11,70 +11,91 @@
      - 브라우저가 자동으로 열리고, 사용자가 로그인을 완료하면 토큰이 자동 저장됩니다.
   2. 완료 후 `relay status --json`으로 로그인 성공을 확인합니다.
 
-### 0-2. 소스 패키징 (source → .relay/)
+### 0-2. 소스 패키징 (콘텐츠 선택 → .relay/)
 
-`relay package` CLI 명령을 사용하여 소스 디렉토리의 콘텐츠를 .relay/로 동기화합니다.
+`relay package` CLI 명령을 사용하여 소스의 콘텐츠를 .relay/로 동기화합니다.
 소스 탐색과 파일 비교는 CLI가 결정적으로 처리하고, 에이전트는 결과를 사용자에게 보여주고 흐름을 조율합니다.
+
+**핵심 원칙:**
+- `.relay/`는 배포 산출물이지, 작업 공간이 아닙니다. 사용자의 작업 공간은 소스 디렉토리(로컬/글로벌)입니다.
+- 로컬 소스와 글로벌 소스를 동일하게 취급합니다. 구분은 내부 경로로만 처리합니다.
+- 소스 디렉토리 통째가 아닌 개별 스킬/에이전트를 체리픽하여 패키지에 포함합니다.
+- relay.yaml의 `contents[]` 매니페스트로 "뭘 어디서 가져왔나"를 추적합니다.
 
 #### A. 최초 배포 (.relay/relay.yaml이 없음)
 
 ##### 1단계: 소스 탐색
 
 `relay package --init --json` 실행
-- CLI가 프로젝트에서 에이전트 CLI 디렉토리(.claude/, .codex/, .gemini/ 등)를 자동 탐색합니다.
-- 동시에 글로벌 스킬 디렉토리(~/.claude/skills/, ~/.codex/skills/ 등)도 스캔합니다.
-- JSON 결과에 로컬 detected와 글로벌 스킬이 모두 포함됩니다:
+- CLI가 프로젝트 로컬(.claude/, .codex/ 등)과 글로벌 홈(~/.claude/, ~/.codex/ 등)을 모두 스캔합니다.
+- 각 소스의 skills/, agents/, commands/, rules/ 내 개별 항목 목록을 반환합니다.
+- 동시에 `~/.relay/agents/`에 기존 글로벌 에이전트 패키지가 있는지도 확인합니다.
+- JSON 결과:
   ```json
   {
     "status": "init_required",
-    "detected": [
-      { "source": ".claude", "name": "Claude Code", "summary": { "skills": 2, "commands": 3 }, "fileCount": 8 },
-      { "source": ".codex", "name": "Codex", "summary": { "agents": 1 }, "fileCount": 2 }
+    "sources": [
+      {
+        "path": ".claude",
+        "location": "local",
+        "name": "Claude Code",
+        "items": [
+          { "name": "code-review", "type": "skill", "relativePath": "skills/code-review" },
+          { "name": "deploy", "type": "command", "relativePath": "commands/deploy.md" }
+        ]
+      },
+      {
+        "path": "~/.claude",
+        "location": "global",
+        "name": "Claude Code (global)",
+        "items": [
+          { "name": "qa-testing", "type": "skill", "relativePath": "skills/qa-testing" },
+          { "name": "dev-lead", "type": "agent", "relativePath": "agents/dev-lead.md" }
+        ]
+      }
     ],
-    "global_skills": [
-      { "path": "~/.claude/skills/code-review", "name": "code-review", "description": "코드 리뷰 자동화" },
-      { "path": "~/.claude/skills/qa-testing", "name": "qa-testing", "description": "QA 테스트 실행" }
-    ]
+    "existing_agents": []
   }
   ```
 
-- 아래 4가지 케이스로 분기합니다:
+- 아래 케이스로 분기합니다:
 
-| 로컬 detected | 글로벌 스킬 | 동작 |
+| sources | existing_agents | 동작 |
 |---|---|---|
-| 있음 | 있음 | 로컬 소스 선택 후, 글로벌 스킬 임포트 여부를 추가로 질문 (1-b단계) |
-| 있음 | 없음 | 기존 플로우 그대로 (1-b단계 건너뜀) |
-| 없음 | 있음 | "프로젝트에 에이전트 콘텐츠가 없지만, 글로벌 스킬 N개를 발견했습니다" → 다중선택 (1-b단계) |
-| 없음 | 없음 | "배포 가능한 에이전트 콘텐츠가 없습니다. skills/이나 commands/를 먼저 만들어주세요." 안내 후 중단 |
+| 항목 있음 | 없음 | 콘텐츠 선택 → 패키징 (1-b단계) |
+| 항목 있음 | 있음 | 기존 에이전트 재배포 또는 새 에이전트 생성 선택 |
+| 항목 없음 | 있음 | 기존 에이전트 재배포 선택 |
+| 항목 없음 | 없음 | "배포 가능한 에이전트 콘텐츠가 없습니다." 안내 후 중단 |
 
-##### 1-b단계: 글로벌 스킬 임포트 (global_skills가 있을 때만)
-
-글로벌 스킬의 SKILL.md 파일 **내용을 직접 읽어** 각 스킬이 무엇을 하는지 파악한 후, 사용자에게 다중선택을 제안합니다.
-
-**로컬 콘텐츠가 있을 때:**
+**기존 글로벌 에이전트가 있을 때:**
 
 **AskUserQuestion 호출:**
-- question: "글로벌 스킬도 함께 배포할까요?"
-- options: 각 스킬을 기능 설명과 함께 나열 + "건너뛰기"
-- 예: `["code-review — 코드 리뷰 자동화", "qa-testing — QA 테스트 실행", "건너뛰기"]`
-- 여러 개 선택 가능하도록 안내합니다. 사용자가 쉼표로 구분하거나 여러 번 응답할 수 있습니다.
+- question: "기존 에이전트를 발견했습니다. 어떤 작업을 할까요?"
+- options: `["<name> (v<version>) — 재배포", ..., "새 에이전트 만들기"]`
+- 재배포 선택 시 → B. 재배포 플로우로 이동 (해당 에이전트의 relay.yaml 경로 사용)
+- 새 에이전트 선택 시 → 아래 1-b단계로 진행
 
-**로컬 콘텐츠가 없을 때 (글로벌 스킬만 있는 경우):**
+##### 1-b단계: 콘텐츠 선택
+
+`sources[]`의 모든 항목을 사용자에게 표시하고, 패키지에 포함할 콘텐츠를 선택받습니다.
+각 항목의 SKILL.md, 에이전트 파일 등의 **내용을 직접 읽어** 기능을 파악한 후 설명과 함께 표시합니다.
 
 **AskUserQuestion 호출:**
-- question: "프로젝트에 에이전트 콘텐츠가 없지만, 글로벌 스킬 N개를 발견했습니다. 배포할 스킬을 선택하세요"
-- options: 각 스킬을 기능 설명과 함께 나열 + "취소"
-- 최소 1개 이상 선택해야 진행 가능합니다.
+- question: "배포할 콘텐츠를 선택하세요"
+- options: 모든 소스의 항목을 기능 설명과 함께 나열
+- 예: `["code-review — 코드 리뷰 자동화 (로컬)", "qa-testing — QA 테스트 (글로벌)", "dev-lead — 개발 리드 에이전트 (글로벌)", "전체 선택"]`
+- **중요:** 소스 경로(.claude 등)는 내부적으로만 추적합니다. 사용자에게는 기능 설명으로 보여줍니다. 로컬/글로벌 구분은 참고용으로만 표시합니다.
 
-**선택된 글로벌 스킬 처리:**
-- 선택된 스킬을 `.relay/skills/<스킬명>/`으로 복사합니다.
-- 복사 후에는 `.relay/` 내에서 독립 관리됩니다 (글로벌 원본과의 링크 없음).
-- 재배포 시 글로벌 스킬을 다시 스캔하지 않습니다. 이미 `.relay/`에 복사된 콘텐츠를 기준으로 동작합니다.
-- relay.yaml의 `source` 필드는 로컬 소스 디렉토리만 추적합니다. 글로벌에서 임포트한 스킬은 source 추적 대상이 아닙니다.
+**에이전트 의존성 분석:**
+- 사용자가 에이전트를 선택하면, 해당 에이전트 파일의 **내용을 직접 읽어** 참조하는 스킬을 파악합니다.
+- 슬래시 커맨드 참조, 스킬 이름 언급, "~를 사용" 패턴 등을 탐색합니다.
+- 의존 스킬이 sources에 존재하면: "dev-lead가 code-review, qa-testing을 참조합니다. 함께 포함합니다."라고 안내하고 자동 포함 대상으로 표시합니다.
+- 의존 스킬이 sources에 없으면: "dev-lead가 참조하는 missing-skill을 찾을 수 없습니다"라고 경고합니다.
+- 사용자가 자동 포함을 거부하면 해당 스킬은 제외합니다.
 
 ##### 2단계: 콘텐츠 분석 & 에이전트 포지셔닝
 
-detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일과 **임포트된 글로벌 스킬의 내용을 직접 읽어** 에이전트의 정체성을 파악합니다.
+선택된 콘텐츠의 내용을 직접 읽어 에이전트의 정체성을 파악합니다.
 
 **분석 관점:**
 - 이 에이전트가 **무엇을 하는 에이전트**인지 (코드 리뷰? QA? 문서 생성? 데이터 분석?)
@@ -86,32 +107,7 @@ detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일과
 **중요: 소스 디렉토리 이름(.claude 등)이나 글로벌/로컬 구분은 인프라 디테일이므로 사용자에게 노출하지 않습니다.**
 사용자에게는 에이전트의 기능과 정체성 중심으로 질문합니다.
 
-##### 3단계: 배포 제안
-
-분석 결과를 바탕으로 에이전트 배포를 제안합니다.
-
-**detected가 1개일 때:**
-
-**AskUserQuestion 호출:**
-- question: 콘텐츠 분석 기반의 포지셔닝 질문
-- 예시:
-  - "Supabase 웹 개발 에이전트로 배포할까요? (skills 2개, commands 3개)"
-  - "코드 리뷰 자동화 에이전트로 배포할까요? (skills 1개, agents 2개)"
-  - "Next.js QA 테스트 에이전트로 배포할까요? (commands 5개)"
-- options: `["배포", "취소"]`
-
-**detected가 여러 개일 때:**
-각 소스의 콘텐츠를 분석하여 서로 다른 에이전트로 포지셔닝합니다.
-
-**AskUserQuestion 호출:**
-- question: "어떤 에이전트로 배포할까요?"
-- options: 콘텐츠 기반 설명 (예: `["Supabase 웹 개발 에이전트 (skills 2개, commands 3개)", "QA 자동화 에이전트 (agents 1개)"]`)
-- 디렉토리 이름은 내부적으로만 매핑하고, 사용자에게는 에이전트의 기능으로 보여줍니다.
-
-**글로벌 스킬만으로 구성된 경우 (로컬 detected 없음):**
-임포트된 스킬들의 내용을 분석하여 에이전트 포지셔닝을 자동 생성합니다. 별도의 소스 선택 없이 바로 4단계로 진행합니다.
-
-##### 4단계: 에이전트 정보 확정
+##### 3단계: 에이전트 정보 확정
 
 포지셔닝 분석을 기반으로 에이전트 이름과 설명을 제안합니다.
 
@@ -138,63 +134,112 @@ detected된 소스 디렉토리의 skills/, commands/, agents/, rules/ 파일과
 - 좋은 예: "Supabase 기반 웹앱의 DB 마이그레이션, API 개발, 테스트를 자동화합니다"
 - 나쁜 예: ".claude 디렉토리의 skills와 commands를 패키징한 에이전트"
 
-##### 5단계: 초기화 & 패키징
+##### 4단계: 초기화 & 패키징
 
 자동 처리:
-- `.relay/relay.yaml` 생성:
-  ```yaml
-  name: <확정된 이름>  # 한국어 가능 (예: "콘텐츠 에이전트")
-  slug: <확정된 slug>  # 영문만 (예: "content-agent")
-  description: <확정된 설명>
-  source: <선택된 소스 디렉토리> # 예: .claude (내부용, 로컬 소스가 있을 때만)
-  version: 1.0.0
-  tags: []
-  ```
-- 로컬 소스가 있으면: `relay package --source <선택된 소스> --sync --json` 실행하여 콘텐츠를 .relay/로 복사
-- 글로벌 스킬만으로 구성된 경우: 1-b단계에서 이미 `.relay/skills/`로 복사 완료. source 필드는 생략하고, relay.yaml에 패키징 동기화 대상 없이 `.relay/` 직접 편집 모드로 동작합니다.
+
+**패키지 홈 결정:**
+- 프로젝트 디렉토리에 `.relay/`가 있거나 만들 수 있으면 → 프로젝트 `.relay/` 사용
+- 프로젝트 디렉토리가 없으면 (데스크톱앱 등) → `~/.relay/agents/<slug>/` 에 생성
+
+**relay.yaml 생성:**
+```yaml
+name: <확정된 이름>  # 한국어 가능
+slug: <확정된 slug>  # 영문만
+description: <확정된 설명>
+version: 1.0.0
+tags: []
+contents:
+  - name: code-review
+    type: skill
+    from: .claude/skills/code-review
+  - name: qa-testing
+    type: skill
+    from: ~/.claude/skills/qa-testing
+  - name: dev-lead
+    type: agent
+    from: ~/.claude/agents/dev-lead.md
+```
+
+- 선택된 각 콘텐츠의 `from` 경로: 로컬이면 상대 경로 (`.claude/skills/...`), 글로벌이면 `~/` 접두사 (`~/.claude/skills/...`)
+- `relay package --sync --json` 실행하여 선택된 콘텐츠를 .relay/로 복사
 - `relay init --auto` 실행하여 글로벌 커맨드 설치 보장
 - 결과를 사용자에게 표시
 
 #### B. 재배포 (.relay/relay.yaml이 있음)
 
-1. `relay package --json` 실행
-   - CLI가 relay.yaml의 `source` 필드를 읽고, 소스 디렉토리와 .relay/를 파일 해시로 비교합니다.
-   - JSON 결과 예시:
-     ```json
-     {
-       "source": ".claude",
-       "sourceName": "Claude Code",
-       "synced": false,
-       "diff": [
-         { "relPath": "skills/code-review/SKILL.md", "status": "modified" },
-         { "relPath": "commands/deploy.md", "status": "added" },
-         { "relPath": "commands/old-cmd.md", "status": "deleted" }
-       ],
-       "summary": { "added": 1, "modified": 1, "deleted": 1, "unchanged": 5 }
-     }
-     ```
+##### B-0. 기존 source 필드 마이그레이션
 
-2. **변경이 있으면** (added + modified + deleted > 0) → diff를 사용자에게 보여줍니다:
-   ```
-   소스 동기화 (.claude/ → .relay/)
-     변경: skills/code-review/SKILL.md
-     신규: commands/deploy.md
-     삭제: commands/old-cmd.md
-     유지: 5개 파일
-   ```
+relay.yaml에 기존 `source` 필드만 있고 `contents`가 없으면:
+1. "기존 source 형식을 새로운 contents 형식으로 마이그레이션합니다."라고 안내
+2. `relay package --migrate --json` 실행
+3. 마이그레이션 결과를 사용자에게 보여줌
+4. 이후 정상 재배포 플로우로 진행
 
-   **AskUserQuestion 호출:**
-   - question: "소스 변경사항을 .relay/에 반영할까요?"
-   - options: `["반영", "변경 확인", "건너뛰기"]`
+##### B-1. 콘텐츠 동기화
 
-   **응답 처리:**
-   - "반영" → `relay package --sync --json` 실행하여 동기화
-   - "변경 확인" → 변경된 파일의 내용을 직접 읽어 diff를 상세히 보여준 후 다시 AskUserQuestion
-   - "건너뛰기" → 현재 .relay/ 그대로 배포
+`relay package --json` 실행
+- CLI가 relay.yaml의 `contents[]` 매니페스트를 읽고, 각 항목의 원본(from 경로)과 .relay/ 내 복사본을 파일 해시로 비교합니다.
+- 동시에 소스 디렉토리를 다시 스캔하여 새로 추가된 항목도 탐지합니다.
+- JSON 결과:
+  ```json
+  {
+    "diff": [
+      { "name": "code-review", "type": "skill", "status": "modified", "files": [...] },
+      { "name": "qa-testing", "type": "skill", "status": "unchanged" }
+    ],
+    "new_items": [
+      { "name": "new-skill", "type": "skill", "source": "~/.claude", "relativePath": "skills/new-skill" }
+    ],
+    "synced": false,
+    "summary": { "modified": 1, "unchanged": 1, "source_missing": 0, "new_available": 1 }
+  }
+  ```
 
-3. **변경이 없으면** → "✓ 소스와 동기화 상태입니다." 표시 후 다음 단계로
+##### B-2. 변경 사항 처리
 
-4. `source` 필드가 없으면 → .relay/ 내 콘텐츠를 직접 편집하는 모드로 간주하고 동기화를 건너뜁니다.
+**변경이 있으면** (modified > 0):
+
+변경된 항목을 표시합니다:
+```
+콘텐츠 동기화 상태
+  변경: code-review (skill)
+    modified: SKILL.md
+  유지: qa-testing (skill)
+```
+
+**AskUserQuestion 호출:**
+- question: "변경된 콘텐츠를 반영할까요?"
+- options: `["반영", "변경 확인", "건너뛰기"]`
+
+**응답 처리:**
+- "반영" → `relay package --sync --json` 실행하여 동기화
+- "변경 확인" → 변경된 파일의 내용을 직접 읽어 diff를 상세히 보여준 후 다시 AskUserQuestion
+- "건너뛰기" → 현재 .relay/ 그대로 배포
+
+**변경이 없으면** → "✓ 모든 콘텐츠가 동기화 상태입니다." 표시 후 다음 단계로
+
+**source_missing인 항목이 있으면:**
+- "⚠ code-review의 원본(~/.claude/skills/code-review)을 찾을 수 없습니다. .relay/ 내 복사본을 사용합니다."라고 안내
+
+##### B-3. 새 콘텐츠 추가
+
+**new_items가 있으면:**
+
+새로 발견된 항목의 파일 내용을 직접 읽어 기능을 파악한 후 표시합니다:
+
+**AskUserQuestion 호출:**
+- question: "새로 발견된 콘텐츠가 있습니다. 패키지에 추가할까요?"
+- options: 각 항목을 기능 설명과 함께 나열 + "건너뛰기"
+- 예: `["new-skill — 새 유틸리티 스킬", "건너뛰기"]`
+
+추가 선택 시:
+- 해당 항목을 relay.yaml의 `contents[]`에 추가
+- .relay/로 복사
+
+**new_items가 없으면** → 이 단계 건너뜀
+
+**contents가 없으면** (contents 필드가 빈 배열) → .relay/ 내 콘텐츠를 직접 편집하는 모드로 간주하고 동기화를 건너뜁니다.
 
 ## 인터랙션 플로우
 

@@ -1,12 +1,18 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import crypto from 'crypto'
 import { Command } from 'commander'
 import yaml from 'js-yaml'
-import { detectAgentCLIs, type AITool } from '../lib/ai-tools.js'
+import {
+  detectAgentCLIs,
+  detectGlobalCLIs,
+  scanLocalItems,
+  scanGlobalItems,
+  type ContentItem,
+} from '../lib/ai-tools.js'
 
 const SYNC_DIRS = ['skills', 'commands', 'agents', 'rules'] as const
-const EXCLUDE_SUBDIRS = ['relay'] // relay CLI 전용 하위 디렉토리 제외
 
 // ─── Types ───
 
@@ -16,12 +22,6 @@ interface FileEntry {
   hash: string
 }
 
-interface SourceScanResult {
-  tool: AITool
-  files: FileEntry[]
-  summary: Record<string, number> // dir → count (예: { skills: 2, commands: 3 })
-}
-
 type DiffStatus = 'added' | 'modified' | 'deleted' | 'unchanged'
 
 interface DiffEntry {
@@ -29,16 +29,41 @@ interface DiffEntry {
   status: DiffStatus
 }
 
-interface PackageResult {
+// ─── Contents Manifest Types ───
+
+import type { ContentType } from '../lib/ai-tools.js'
+
+export interface ContentEntry {
+  name: string
+  type: ContentType
+  from: string // 상대 경로(.claude/skills/x) 또는 글로벌(~/.claude/skills/x)
+}
+
+type ContentDiffStatus = 'modified' | 'unchanged' | 'source_missing'
+
+interface ContentDiffEntry {
+  name: string
+  type: ContentType
+  status: ContentDiffStatus
+  files?: DiffEntry[]
+}
+
+interface NewItemEntry {
+  name: string
+  type: ContentType
   source: string
-  sourceName: string
+  relativePath: string
+}
+
+interface ContentsPackageResult {
+  diff: ContentDiffEntry[]
+  new_items: NewItemEntry[]
   synced: boolean
-  diff: DiffEntry[]
   summary: {
-    added: number
     modified: number
-    deleted: number
     unchanged: number
+    source_missing: number
+    new_available: number
   }
 }
 
@@ -47,85 +72,6 @@ interface PackageResult {
 function fileHash(filePath: string): string {
   const content = fs.readFileSync(filePath)
   return crypto.createHash('md5').update(content).digest('hex')
-}
-
-/**
- * 디렉토리를 재귀 탐색하여 파일 목록을 반환한다.
- * baseDir 기준 상대 경로 + 해시.
- */
-function scanDir(baseDir: string, subDir: string): FileEntry[] {
-  const fullDir = path.join(baseDir, subDir)
-  if (!fs.existsSync(fullDir)) return []
-
-  const entries: FileEntry[] = []
-
-  function walk(dir: string) {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith('.')) continue
-      const fullPath = path.join(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(fullPath)
-      } else {
-        const relPath = path.relative(baseDir, fullPath)
-        entries.push({ relPath, hash: fileHash(fullPath) })
-      }
-    }
-  }
-
-  walk(fullDir)
-  return entries
-}
-
-/**
- * 소스 디렉토리(예: .claude/)에서 배포 가능한 콘텐츠를 스캔한다.
- * relay/ 하위 디렉토리는 제외.
- */
-function scanSource(projectPath: string, tool: AITool): SourceScanResult {
-  const sourceBase = path.join(projectPath, tool.skillsDir)
-  const files: FileEntry[] = []
-  const summary: Record<string, number> = {}
-
-  for (const dir of SYNC_DIRS) {
-    const fullDir = path.join(sourceBase, dir)
-    if (!fs.existsSync(fullDir)) continue
-
-    // 제외 대상 필터링 (예: commands/relay/)
-    const dirEntries = fs.readdirSync(fullDir, { withFileTypes: true })
-    let count = 0
-
-    for (const entry of dirEntries) {
-      if (entry.name.startsWith('.')) continue
-      if (entry.isDirectory() && EXCLUDE_SUBDIRS.includes(entry.name)) continue
-
-      const entryPath = path.join(fullDir, entry.name)
-      if (entry.isDirectory()) {
-        // 하위 파일 재귀 탐색
-        const subFiles = scanDir(sourceBase, path.join(dir, entry.name))
-        // relPath를 sourceBase 기준 → SYNC_DIRS 기준으로 유지
-        files.push(...subFiles)
-        count += subFiles.length > 0 ? 1 : 0 // 디렉토리 단위로 카운트
-      } else {
-        const relPath = path.relative(sourceBase, entryPath)
-        files.push({ relPath, hash: fileHash(entryPath) })
-        count++
-      }
-    }
-
-    if (count > 0) summary[dir] = count
-  }
-
-  return { tool, files, summary }
-}
-
-/**
- * .relay/ 디렉토리의 현재 콘텐츠를 스캔한다.
- */
-function scanRelay(relayDir: string): FileEntry[] {
-  const files: FileEntry[] = []
-  for (const dir of SYNC_DIRS) {
-    files.push(...scanDir(relayDir, dir))
-  }
-  return files
 }
 
 /**
@@ -183,6 +129,220 @@ function syncToRelay(sourceBase: string, relayDir: string, diff: DiffEntry[]): v
   }
 }
 
+// ─── Contents-based Helpers ───
+
+/**
+ * from 경로를 절대 경로로 해석한다.
+ * ~/로 시작하면 홈 디렉토리, 그 외는 projectPath 기준 상대 경로.
+ */
+function resolveFromPath(fromPath: string, projectPath: string): string {
+  if (fromPath.startsWith('~/')) {
+    return path.join(os.homedir(), fromPath.slice(2))
+  }
+  return path.join(projectPath, fromPath)
+}
+
+/**
+ * 파일 또는 디렉토리의 모든 파일을 재귀 스캔하여 FileEntry[]를 반환한다.
+ * relPath는 baseDir 기준.
+ */
+function scanPath(absPath: string): FileEntry[] {
+  if (!fs.existsSync(absPath)) return []
+
+  const stat = fs.statSync(absPath)
+  if (stat.isFile()) {
+    return [{ relPath: path.basename(absPath), hash: fileHash(absPath) }]
+  }
+
+  // 디렉토리
+  const entries: FileEntry[] = []
+  function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else {
+        entries.push({ relPath: path.relative(absPath, fullPath), hash: fileHash(fullPath) })
+      }
+    }
+  }
+  walk(absPath)
+  return entries
+}
+
+/**
+ * contents 매니페스트 기반으로 각 항목의 원본과 .relay/ 복사본을 비교한다.
+ */
+function computeContentsDiff(
+  contents: ContentEntry[],
+  relayDir: string,
+  projectPath: string,
+): { diff: ContentDiffEntry[]; newItems: NewItemEntry[] } {
+  const diff: ContentDiffEntry[] = []
+
+  for (const entry of contents) {
+    const absFrom = resolveFromPath(entry.from, projectPath)
+
+    if (!fs.existsSync(absFrom)) {
+      diff.push({ name: entry.name, type: entry.type, status: 'source_missing' })
+      continue
+    }
+
+    // from 경로에서 .relay/ 내 대응 위치 결정
+    // from: .claude/skills/code-review → .relay/skills/code-review
+    // from: ~/.claude/skills/code-review → .relay/skills/code-review
+    const relaySubPath = deriveRelaySubPath(entry)
+    const relayItemDir = path.join(relayDir, relaySubPath)
+
+    const sourceFiles = scanPath(absFrom)
+    const relayFiles = scanPath(relayItemDir)
+
+    const fileDiff = computeDiff(sourceFiles, relayFiles)
+    const hasChanges = fileDiff.some((d) => d.status !== 'unchanged')
+
+    diff.push({
+      name: entry.name,
+      type: entry.type,
+      status: hasChanges ? 'modified' : 'unchanged',
+      files: hasChanges ? fileDiff.filter((d) => d.status !== 'unchanged') : undefined,
+    })
+  }
+
+  // 소스 디렉토리를 다시 스캔하여 contents에 없는 새 항목 탐지
+  const newItems = discoverNewItems(contents, projectPath)
+
+  return { diff, newItems }
+}
+
+/**
+ * contents 항목의 from 경로에서 .relay/ 내 서브경로를 유도한다.
+ * 예: .claude/skills/code-review → skills/code-review
+ *     ~/.claude/agents/dev-lead.md → agents/dev-lead.md
+ */
+function deriveRelaySubPath(entry: ContentEntry): string {
+  const from = entry.from.startsWith('~/') ? entry.from.slice(2) : entry.from
+  // skills/xxx, agents/xxx 등의 패턴을 추출
+  for (const dir of SYNC_DIRS) {
+    const idx = from.indexOf(`/${dir}/`)
+    if (idx !== -1) {
+      return from.slice(idx + 1) // /skills/code-review → skills/code-review
+    }
+  }
+  // fallback: type + name
+  return `${entry.type}s/${entry.name}`
+}
+
+/**
+ * contents에 등록되지 않은 새 항목을 소스 디렉토리에서 찾는다.
+ */
+function discoverNewItems(contents: ContentEntry[], projectPath: string): NewItemEntry[] {
+  const existingNames = new Set(contents.map((c) => `${c.type}:${c.name}`))
+  const newItems: NewItemEntry[] = []
+
+  // 로컬 소스 스캔
+  const localTools = detectAgentCLIs(projectPath)
+  for (const tool of localTools) {
+    const items = scanLocalItems(projectPath, tool)
+    for (const item of items) {
+      if (!existingNames.has(`${item.type}:${item.name}`)) {
+        newItems.push({
+          name: item.name,
+          type: item.type,
+          source: tool.skillsDir,
+          relativePath: item.relativePath,
+        })
+      }
+    }
+  }
+
+  // 글로벌 소스 스캔
+  const globalTools = detectGlobalCLIs()
+  for (const tool of globalTools) {
+    const items = scanGlobalItems(tool)
+    for (const item of items) {
+      if (!existingNames.has(`${item.type}:${item.name}`)) {
+        newItems.push({
+          name: item.name,
+          type: item.type,
+          source: `~/${tool.skillsDir}`,
+          relativePath: item.relativePath,
+        })
+      }
+    }
+  }
+
+  return newItems
+}
+
+/**
+ * contents 항목 단위로 from → .relay/ 동기화한다.
+ */
+function syncContentsToRelay(
+  contents: ContentEntry[],
+  contentsDiff: ContentDiffEntry[],
+  relayDir: string,
+  projectPath: string,
+): void {
+  for (const diffEntry of contentsDiff) {
+    if (diffEntry.status !== 'modified') continue
+
+    const content = contents.find((c) => c.name === diffEntry.name && c.type === diffEntry.type)
+    if (!content) continue
+
+    const absFrom = resolveFromPath(content.from, projectPath)
+    const relaySubPath = deriveRelaySubPath(content)
+    const relayItemDir = path.join(relayDir, relaySubPath)
+
+    // 소스 파일을 .relay/로 복사
+    const sourceFiles = scanPath(absFrom)
+    const relayFiles = scanPath(relayItemDir)
+    const fileDiff = computeDiff(sourceFiles, relayFiles)
+    syncToRelay(absFrom, relayItemDir, fileDiff)
+  }
+}
+
+// ─── Global Agent Home ───
+
+/**
+ * 패키지 홈 디렉토리를 결정한다.
+ * 1. 프로젝트에 .relay/가 있으면 → projectPath/.relay/
+ * 2. 없으면 → ~/.relay/agents/<slug>/ (slug 필요)
+ *
+ * slug가 없고 프로젝트에도 .relay/가 없으면 null 반환.
+ */
+export function resolveRelayDir(projectPath: string, slug?: string): string | null {
+  const projectRelay = path.join(projectPath, '.relay')
+  if (fs.existsSync(path.join(projectRelay, 'relay.yaml'))) {
+    return projectRelay
+  }
+  // .relay/ 디렉토리는 있지만 relay.yaml이 없는 경우도 프로젝트 모드
+  if (fs.existsSync(projectRelay)) {
+    return projectRelay
+  }
+  // 글로벌 에이전트 홈
+  if (slug) {
+    return path.join(os.homedir(), '.relay', 'agents', slug)
+  }
+  return null
+}
+
+/**
+ * 글로벌 에이전트 홈에 패키지 구조를 초기화한다.
+ */
+export function initGlobalAgentHome(slug: string, yamlData: Record<string, unknown>): string {
+  const agentDir = path.join(os.homedir(), '.relay', 'agents', slug)
+  fs.mkdirSync(agentDir, { recursive: true })
+  fs.mkdirSync(path.join(agentDir, 'skills'), { recursive: true })
+  fs.mkdirSync(path.join(agentDir, 'agents'), { recursive: true })
+  fs.writeFileSync(
+    path.join(agentDir, 'relay.yaml'),
+    yaml.dump(yamlData, { lineWidth: 120 }),
+    'utf-8',
+  )
+  return agentDir
+}
+
 // ─── Command ───
 
 export function registerPackage(program: Command): void {
@@ -192,7 +352,8 @@ export function registerPackage(program: Command): void {
     .option('--source <dir>', '소스 디렉토리 지정 (예: .claude)')
     .option('--sync', '변경사항을 .relay/에 즉시 반영', false)
     .option('--init', '최초 패키징: 소스 감지 → .relay/ 초기화', false)
-    .action(async (opts: { source?: string; sync?: boolean; init?: boolean }) => {
+    .option('--migrate', '기존 source 필드를 contents로 마이그레이션', false)
+    .action(async (opts: { source?: string; sync?: boolean; init?: boolean; migrate?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = process.cwd()
       const relayDir = path.join(projectPath, '.relay')
@@ -200,137 +361,252 @@ export function registerPackage(program: Command): void {
 
       // ─── 최초 패키징 (--init) ───
       if (opts.init || !fs.existsSync(relayYamlPath)) {
-        const detected = detectAgentCLIs(projectPath)
+        // 로컬 + 글로벌 소스를 모두 스캔하여 개별 항목 목록 생성
+        const localTools = detectAgentCLIs(projectPath)
+        const globalTools = detectGlobalCLIs()
 
-        // 각 도구의 콘텐츠 스캔
-        const scans = detected
-          .map((tool) => scanSource(projectPath, tool))
-          .filter((s) => s.files.length > 0)
+        interface SourceEntry {
+          path: string
+          location: 'local' | 'global'
+          name: string
+          items: ContentItem[]
+        }
+
+        const sources: SourceEntry[] = []
+
+        for (const tool of localTools) {
+          const items = scanLocalItems(projectPath, tool)
+          if (items.length > 0) {
+            sources.push({
+              path: tool.skillsDir,
+              location: 'local',
+              name: tool.name,
+              items,
+            })
+          }
+        }
+
+        for (const tool of globalTools) {
+          const items = scanGlobalItems(tool)
+          if (items.length > 0) {
+            sources.push({
+              path: `~/${tool.skillsDir}`,
+              location: 'global',
+              name: `${tool.name} (global)`,
+              items,
+            })
+          }
+        }
+
+        // ~/.relay/agents/ 에 기존 에이전트 패키지가 있는지 스캔
+        const globalAgentsDir = path.join(os.homedir(), '.relay', 'agents')
+        const existingAgents: { slug: string; name: string; version: string; path: string }[] = []
+        if (fs.existsSync(globalAgentsDir)) {
+          for (const entry of fs.readdirSync(globalAgentsDir, { withFileTypes: true })) {
+            if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+            const agentYaml = path.join(globalAgentsDir, entry.name, 'relay.yaml')
+            if (fs.existsSync(agentYaml)) {
+              try {
+                const cfg = yaml.load(fs.readFileSync(agentYaml, 'utf-8')) as Record<string, unknown>
+                existingAgents.push({
+                  slug: (cfg.slug as string) ?? entry.name,
+                  name: (cfg.name as string) ?? entry.name,
+                  version: (cfg.version as string) ?? '0.0.0',
+                  path: `~/.relay/agents/${entry.name}`,
+                })
+              } catch { /* skip invalid yaml */ }
+            }
+          }
+        }
 
         if (json) {
           console.log(JSON.stringify({
             status: 'init_required',
-            detected: scans.map((s) => ({
-              source: s.tool.skillsDir,
-              name: s.tool.name,
-              summary: s.summary,
-              fileCount: s.files.length,
-            })),
+            sources,
+            existing_agents: existingAgents,
           }))
         } else {
-          if (scans.length === 0) {
+          if (sources.length === 0 && existingAgents.length === 0) {
             console.error('배포 가능한 에이전트 콘텐츠를 찾지 못했습니다.')
             console.error('skills/, commands/, agents/, rules/ 중 하나를 만들어주세요.')
             process.exit(1)
           }
 
-          console.error('\n프로젝트에서 발견된 에이전트 콘텐츠:\n')
-          for (const scan of scans) {
-            const parts = Object.entries(scan.summary)
-              .map(([dir, count]) => `${dir} ${count}개`)
-              .join(', ')
-            console.error(`  📁 ${scan.tool.skillsDir}/ — ${parts}`)
+          if (sources.length > 0) {
+            console.error('\n발견된 에이전트 콘텐츠:\n')
+            for (const src of sources) {
+              const typeCounts = new Map<string, number>()
+              for (const item of src.items) {
+                typeCounts.set(item.type, (typeCounts.get(item.type) ?? 0) + 1)
+              }
+              const parts = Array.from(typeCounts.entries())
+                .map(([t, c]) => `${t} ${c}개`)
+                .join(', ')
+              const label = src.location === 'global' ? '🌐' : '📁'
+              console.error(`  ${label} ${src.path}/ — ${parts}`)
+            }
           }
+
+          if (existingAgents.length > 0) {
+            console.error('\n기존 글로벌 에이전트:\n')
+            for (const agent of existingAgents) {
+              console.error(`  📦 ${agent.name} (v${agent.version}) — ${agent.path}`)
+            }
+          }
+
           console.error('')
         }
         return
       }
 
-      // ─── 재패키징 (source 기반 동기화) ───
+      // ─── 마이그레이션 (--migrate) ───
+      if (opts.migrate) {
+        const yamlMigrate = fs.readFileSync(relayYamlPath, 'utf-8')
+        const cfgMigrate = yaml.load(yamlMigrate) as Record<string, unknown>
+
+        if (cfgMigrate.contents) {
+          if (json) {
+            console.log(JSON.stringify({ status: 'already_migrated', message: '이미 contents 형식입니다.' }))
+          } else {
+            console.error('✓ 이미 contents 형식입니다.')
+          }
+          return
+        }
+
+        const legacySource = cfgMigrate.source as string | undefined
+        if (!legacySource) {
+          if (json) {
+            console.log(JSON.stringify({ status: 'no_source', message: 'source 필드가 없습니다.' }))
+          } else {
+            console.error('source 필드가 없습니다. relay package --init으로 초기화하세요.')
+          }
+          process.exit(1)
+        }
+
+        // source 디렉토리를 스캔하여 모든 항목을 contents[]로 변환
+        const sourceBase = path.join(projectPath, legacySource)
+        const migratedContents: ContentEntry[] = []
+
+        if (fs.existsSync(sourceBase)) {
+          const localTools = detectAgentCLIs(projectPath)
+          const tool = localTools.find((t) => t.skillsDir === legacySource)
+          if (tool) {
+            const items = scanLocalItems(projectPath, tool)
+            for (const item of items) {
+              migratedContents.push({
+                name: item.name,
+                type: item.type,
+                from: `${legacySource}/${item.relativePath}`,
+              })
+            }
+          }
+        }
+
+        // relay.yaml에서 source 제거, contents 저장
+        delete cfgMigrate.source
+        cfgMigrate.contents = migratedContents
+        fs.writeFileSync(relayYamlPath, yaml.dump(cfgMigrate, { lineWidth: 120 }), 'utf-8')
+
+        if (json) {
+          console.log(JSON.stringify({ status: 'migrated', contents: migratedContents }))
+        } else {
+          console.error(`✓ source(${legacySource}) → contents(${migratedContents.length}개 항목)로 마이그레이션 완료`)
+        }
+        return
+      }
+
+      // ─── 재패키징 (contents 매니페스트 기반 동기화) ───
       const yamlContent = fs.readFileSync(relayYamlPath, 'utf-8')
       const config = yaml.load(yamlContent) as Record<string, unknown>
-      const source = opts.source ?? (config.source as string | undefined)
+      const contents = (config.contents as ContentEntry[] | undefined) ?? []
 
-      if (!source) {
+      // 기존 source 필드 → contents 마이그레이션 안내
+      if (!config.contents && config.source) {
+        const legacySource = config.source as string
         if (json) {
           console.log(JSON.stringify({
-            status: 'no_source',
-            message: 'relay.yaml에 source 필드가 없습니다. --source 옵션으로 지정하거나 relay.yaml에 source를 추가하세요.',
+            status: 'migration_required',
+            message: `relay.yaml의 source 필드를 contents로 마이그레이션해야 합니다.`,
+            legacy_source: legacySource,
           }))
         } else {
-          console.error('relay.yaml에 source 필드가 없습니다.')
-          console.error('--source <dir> 옵션으로 지정하거나 relay.yaml에 source를 추가하세요.')
+          console.error(`relay.yaml에 기존 source 필드(${legacySource})가 있습니다.`)
+          console.error(`contents 형식으로 마이그레이션하려면: relay package --migrate`)
         }
         process.exit(1)
       }
 
-      // 소스 디렉토리 존재 확인
-      const sourceBase = path.join(projectPath, source)
-      if (!fs.existsSync(sourceBase)) {
-        const msg = `소스 디렉토리 '${source}'를 찾을 수 없습니다.`
+      if (contents.length === 0) {
         if (json) {
-          console.log(JSON.stringify({ error: 'SOURCE_NOT_FOUND', message: msg }))
+          console.log(JSON.stringify({
+            status: 'no_contents',
+            message: 'relay.yaml에 contents가 없습니다. relay package --init으로 패키지를 초기화하세요.',
+          }))
         } else {
-          console.error(msg)
+          console.error('relay.yaml에 contents가 없습니다.')
+          console.error('relay package --init으로 패키지를 초기화하세요.')
         }
         process.exit(1)
       }
 
-      // 소스에서 해당 도구 찾기
-      const allTools = detectAgentCLIs(projectPath)
-      const tool = allTools.find((t) => t.skillsDir === source)
-      const toolName = tool?.name ?? source
-
-      // diff 계산
-      const sourceScan = tool
-        ? scanSource(projectPath, tool)
-        : { tool: { name: source, value: source, skillsDir: source } as AITool, files: [], summary: {} }
-
-      // tool이 없으면 직접 스캔
-      if (!tool) {
-        for (const dir of SYNC_DIRS) {
-          const files = scanDir(sourceBase, dir)
-          sourceScan.files.push(...files)
-          if (files.length > 0) sourceScan.summary[dir] = files.length
-        }
-      }
-
-      const relayFiles = scanRelay(relayDir)
-      const diff = computeDiff(sourceScan.files, relayFiles)
+      // contents 기반 diff 계산
+      const { diff: contentsDiff, newItems } = computeContentsDiff(contents, relayDir, projectPath)
 
       const summary = {
-        added: diff.filter((d) => d.status === 'added').length,
-        modified: diff.filter((d) => d.status === 'modified').length,
-        deleted: diff.filter((d) => d.status === 'deleted').length,
-        unchanged: diff.filter((d) => d.status === 'unchanged').length,
+        modified: contentsDiff.filter((d) => d.status === 'modified').length,
+        unchanged: contentsDiff.filter((d) => d.status === 'unchanged').length,
+        source_missing: contentsDiff.filter((d) => d.status === 'source_missing').length,
+        new_available: newItems.length,
       }
 
-      const hasChanges = summary.added + summary.modified + summary.deleted > 0
+      const hasChanges = summary.modified > 0
 
-      // --sync: 즉시 동기화
+      // --sync: contents 단위 동기화
       if (opts.sync && hasChanges) {
-        syncToRelay(sourceBase, relayDir, diff)
+        syncContentsToRelay(contents, contentsDiff, relayDir, projectPath)
       }
 
-      const result: PackageResult = {
-        source,
-        sourceName: toolName,
+      const result: ContentsPackageResult = {
+        diff: contentsDiff.filter((d) => d.status !== 'unchanged'),
+        new_items: newItems,
         synced: opts.sync === true && hasChanges,
-        diff: diff.filter((d) => d.status !== 'unchanged'),
         summary,
       }
 
       if (json) {
         console.log(JSON.stringify(result))
       } else {
-        if (!hasChanges) {
-          console.error(`✓ 소스(${source})와 .relay/가 동기화 상태입니다.`)
+        if (!hasChanges && newItems.length === 0 && summary.source_missing === 0) {
+          console.error('✓ 모든 콘텐츠가 동기화 상태입니다.')
           return
         }
 
-        console.error(`\n📦 소스 동기화 (${source}/ → .relay/)\n`)
-        for (const entry of diff) {
+        console.error('\n📦 콘텐츠 동기화 상태\n')
+        for (const entry of contentsDiff) {
           if (entry.status === 'unchanged') continue
-          const icon = entry.status === 'added' ? '  신규' : entry.status === 'modified' ? '  변경' : '  삭제'
-          console.error(`${icon}: ${entry.relPath}`)
+          const icon = entry.status === 'modified' ? '  변경' : '  ⚠ 원본 없음'
+          console.error(`${icon}: ${entry.name} (${entry.type})`)
+          if (entry.files) {
+            for (const f of entry.files) {
+              console.error(`    ${f.status}: ${f.relPath}`)
+            }
+          }
         }
+
+        if (newItems.length > 0) {
+          console.error('\n  새로 발견된 콘텐츠:')
+          for (const item of newItems) {
+            console.error(`    + ${item.name} (${item.type}) — ${item.source}`)
+          }
+        }
+
         console.error('')
-        console.error(`  합계: 신규 ${summary.added}, 변경 ${summary.modified}, 삭제 ${summary.deleted}, 유지 ${summary.unchanged}`)
+        console.error(`  합계: 변경 ${summary.modified}, 유지 ${summary.unchanged}, 원본 없음 ${summary.source_missing}, 신규 ${summary.new_available}`)
 
         if (opts.sync) {
-          console.error(`\n✓ .relay/에 반영 완료`)
-        } else {
-          console.error(`\n반영하려면: relay package --sync`)
+          console.error('\n✓ .relay/에 반영 완료')
+        } else if (hasChanges) {
+          console.error('\n반영하려면: relay package --sync')
         }
       }
     })

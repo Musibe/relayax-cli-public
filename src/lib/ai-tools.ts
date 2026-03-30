@@ -53,8 +53,68 @@ export function detectAgentCLIs(projectPath: string): AITool[] {
  * ~/{skillsDir}/ 가 존재하는 CLI를 반환.
  */
 export function detectGlobalCLIs(): AITool[] {
-  const home = path.join(os.homedir())
+  const home = os.homedir()
   return AI_TOOLS.filter((tool) =>
     fs.existsSync(path.join(home, tool.skillsDir))
   )
+}
+
+// ─── Content Item Types ───
+
+export type ContentType = 'skill' | 'agent' | 'command' | 'rule'
+
+export interface ContentItem {
+  name: string
+  type: ContentType
+  /** 소스 디렉토리 기준 상대 경로 (예: skills/code-review) */
+  relativePath: string
+}
+
+const CONTENT_DIRS: { dir: string; type: ContentType }[] = [
+  { dir: 'skills', type: 'skill' },
+  { dir: 'agents', type: 'agent' },
+  { dir: 'commands', type: 'command' },
+  { dir: 'rules', type: 'rule' },
+]
+
+const EXCLUDE_SUBDIRS = ['relay']
+
+/**
+ * 소스 디렉토리(basePath) 안의 skills/, agents/, commands/, rules/에서
+ * 개별 항목을 스캔하여 반환한다.
+ */
+function scanItemsIn(basePath: string): ContentItem[] {
+  const items: ContentItem[] = []
+  for (const { dir, type } of CONTENT_DIRS) {
+    const fullDir = path.join(basePath, dir)
+    if (!fs.existsSync(fullDir)) continue
+
+    for (const entry of fs.readdirSync(fullDir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue
+      if (entry.isDirectory() && EXCLUDE_SUBDIRS.includes(entry.name)) continue
+
+      items.push({
+        name: entry.name.replace(/\.\w+$/, ''), // 파일이면 확장자 제거
+        type,
+        relativePath: path.join(dir, entry.name),
+      })
+    }
+  }
+  return items
+}
+
+/**
+ * 프로젝트 로컬 소스의 개별 스킬/에이전트/커맨드/룰 항목을 반환한다.
+ */
+export function scanLocalItems(projectPath: string, tool: AITool): ContentItem[] {
+  const basePath = path.join(projectPath, tool.skillsDir)
+  return scanItemsIn(basePath)
+}
+
+/**
+ * 글로벌 홈 디렉토리 소스의 개별 스킬/에이전트/커맨드/룰 항목을 반환한다.
+ */
+export function scanGlobalItems(tool: AITool): ContentItem[] {
+  const basePath = path.join(os.homedir(), tool.skillsDir)
+  return scanItemsIn(basePath)
 }
