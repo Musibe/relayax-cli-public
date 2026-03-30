@@ -6,7 +6,7 @@ import { detectAgentCLIs } from './ai-tools.js'
 
 export const API_URL = 'https://www.relayax.com'
 
-const GLOBAL_RELAY_DIR = path.join(os.homedir(), '.relay')
+const GLOBAL_RELAY_DIR = path.join(process.env.RELAY_HOME ?? os.homedir(), '.relay')
 
 /**
  * 설치 경로를 결정한다.
@@ -16,20 +16,21 @@ const GLOBAL_RELAY_DIR = path.join(os.homedir(), '.relay')
  */
 export function getInstallPath(override?: string): string {
   if (override) {
+    const homeDir = process.env.RELAY_HOME ?? os.homedir()
     const resolved = override.startsWith('~')
-      ? path.join(os.homedir(), override.slice(1))
+      ? path.join(homeDir, override.slice(1))
       : path.resolve(override)
     return resolved
   }
 
-  const cwd = process.cwd()
-  const detected = detectAgentCLIs(cwd)
+  const projectRoot = getProjectRoot()
+  const detected = detectAgentCLIs(projectRoot)
 
   if (detected.length >= 1) {
-    return path.join(cwd, detected[0].skillsDir)
+    return path.join(projectRoot, detected[0].skillsDir)
   }
 
-  return cwd
+  return projectRoot
 }
 
 /** ~/.relay/ — 글로벌 (token, CLI cache) */
@@ -39,9 +40,14 @@ export function ensureGlobalRelayDir(): void {
   }
 }
 
+/** 프로젝트 루트 경로 (RELAY_PROJECT_PATH > cwd) */
+function getProjectRoot(): string {
+  return process.env.RELAY_PROJECT_PATH ?? process.cwd()
+}
+
 /** cwd/.relay/ — 프로젝트 로컬 (installed.json, agents/) */
 export function ensureProjectRelayDir(): void {
-  const dir = path.join(process.cwd(), '.relay')
+  const dir = path.join(getProjectRoot(), '.relay')
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
@@ -88,7 +94,7 @@ export function saveToken(token: string): void {
   fs.chmodSync(tokenFile, 0o600)
 }
 
-const LOCK_FILE = path.join(os.homedir(), '.relay', '.token.lock')
+const LOCK_FILE = path.join(GLOBAL_RELAY_DIR, '.token.lock')
 const LOCK_TIMEOUT = 15000 // 15s
 
 /**
@@ -149,6 +155,9 @@ async function doRefresh(refreshToken: string): Promise<TokenData | null> {
  * - refresh 실패해도 access_token이 아직 유효하면 계속 사용
  */
 export async function getValidToken(): Promise<string | undefined> {
+  // RELAY_TOKEN 환경변수가 있으면 최우선 사용 (sandbox/CI 환경)
+  if (process.env.RELAY_TOKEN) return process.env.RELAY_TOKEN
+
   // 매번 파일에서 새로 읽음 (다른 프로세스가 갱신했을 수 있으므로)
   const data = loadTokenData()
   if (!data) return undefined
@@ -217,7 +226,7 @@ function normalizeInstalledRegistry(raw: InstalledRegistry): InstalledRegistry {
 
 /** 프로젝트 로컬 installed.json 읽기 */
 export function loadInstalled(): InstalledRegistry {
-  const file = path.join(process.cwd(), '.relay', 'installed.json')
+  const file = path.join(getProjectRoot(), '.relay', 'installed.json')
   if (!fs.existsSync(file)) {
     return {}
   }
@@ -231,7 +240,7 @@ export function loadInstalled(): InstalledRegistry {
 /** 프로젝트 로컬 installed.json 쓰기 */
 export function saveInstalled(registry: InstalledRegistry): void {
   ensureProjectRelayDir()
-  const file = path.join(process.cwd(), '.relay', 'installed.json')
+  const file = path.join(getProjectRoot(), '.relay', 'installed.json')
   fs.writeFileSync(file, JSON.stringify(registry, null, 2))
 }
 

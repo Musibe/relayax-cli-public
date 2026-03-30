@@ -1,3 +1,21 @@
+## Step 0. 환경 감지
+
+sandbox 환경(Cowork, Codex 등)에서는 `$HOME`이 격리될 수 있습니다.
+아래 명령어로 확인하세요:
+
+```bash
+ls ~/.relay/token 2>/dev/null && echo "token-ok" || echo "token-missing"
+```
+
+`token-missing`이면, 이 세션에서 `relay login --device`로 새로 로그인해야 합니다.
+이미 로그인한 토큰이 있다면 환경변수로 전달할 수도 있습니다:
+
+```bash
+export RELAY_TOKEN=<토큰>
+```
+
+`token-ok`이면 이 단계를 건너뛰세요.
+
 ## Step 1. Relay CLI 설치
 
 relay CLI가 설치되어 있지 않다면:
