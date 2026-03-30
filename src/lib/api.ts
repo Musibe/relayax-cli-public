@@ -15,7 +15,10 @@ export async function fetchMyOrgs(): Promise<{ id: string; slug: string; name: s
 export async function fetchAgentInfo(slug: string): Promise<AgentRegistryInfo> {
   const registrySlug = slug.startsWith('@') ? slug.slice(1) : slug
   const url = `${API_URL}/api/registry/${registrySlug}`
-  const res = await fetch(url)
+  const token = await getValidToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`에이전트 정보 조회 실패 (${res.status}): ${body}`)
@@ -30,7 +33,10 @@ export async function searchAgents(
   const params = new URLSearchParams({ q: query })
   if (tag) params.set('tag', tag)
   const url = `${API_URL}/api/registry/search?${params.toString()}`
-  const res = await fetch(url)
+  const token = await getValidToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`검색 실패 (${res.status}): ${body}`)
@@ -48,7 +54,10 @@ export interface AgentVersionInfo {
 export async function fetchAgentVersions(slug: string): Promise<AgentVersionInfo[]> {
   const registrySlug = slug.startsWith('@') ? slug.slice(1) : slug
   const url = `${API_URL}/api/registry/${registrySlug}/versions`
-  const res = await fetch(url)
+  const token = await getValidToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`버전 목록 조회 실패 (${res.status}): ${body}`)
@@ -91,7 +100,10 @@ export interface ResolvedSlug {
 
 export async function resolveSlugFromServer(name: string): Promise<ResolvedSlug[]> {
   const url = `${API_URL}/api/registry/resolve?name=${encodeURIComponent(name)}`
-  const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+  const token = await getValidToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(5000) })
   if (!res.ok) {
     throw new Error(`slug resolve 실패 (${res.status})`)
   }
