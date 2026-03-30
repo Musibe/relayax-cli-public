@@ -10,6 +10,7 @@ import { checkCliVersion } from '../lib/version-check.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
+import { GUIDE_INSTRUCTION } from '../prompts/index.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -898,12 +899,12 @@ export function registerPublish(program: Command): void {
 
             console.log(`\n  \x1b[90m주변인에게 공유하세요:\x1b[0m\n`)
             console.log('```')
-            console.log('아래 가이드를 읽고 그대로 따라해줘:')
+            console.log(GUIDE_INSTRUCTION)
             console.log(guideUrl)
             console.log('```')
 
-            console.log(`\n  \x1b[90mCLI 설치된 사용자용 (짧은 버전):\x1b[0m`)
-            console.log(`  /relay:relay-install ${result.slug}`)
+            console.log(`\n  \x1b[90m이미 relay를 쓰는 사용자는 이렇게만 하면 됩니다:\x1b[0m`)
+            console.log(`  /relay-install ${result.slug}`)
 
             if (config.visibility === 'private') {
               console.log(`\n  \x1b[90mprivate 에이전트:\x1b[0m`)

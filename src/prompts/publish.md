@@ -406,14 +406,14 @@ requires: env 2개, cli 1개
 - `relay publish --json` 응답의 `access_code` 필드가 있으면 (internal agent) 가이드 URL에 `?code={access_code}` 포함:
 
 \`\`\`
-아래 가이드를 읽고 그대로 따라해줘:
+{{GUIDE_INSTRUCTION}}
 https://relayax.com/api/registry/{owner}/{slug}/guide.md?code={access_code}
 \`\`\`
 
 - `access_code`가 없으면 (public agent) code 파라미터 없이:
 
 \`\`\`
-아래 가이드를 읽고 그대로 따라해줘:
+{{GUIDE_INSTRUCTION}}
 https://relayax.com/api/registry/{owner}/{slug}/guide.md
 \`\`\`
 

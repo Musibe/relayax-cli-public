@@ -15,10 +15,12 @@ export const ERROR_HANDLING_GUIDE = readPrompt('_error-handling.md')
 export const SETUP_ENVIRONMENT = readPrompt('_setup-environment.md')
 export const SETUP_CLI = readPrompt('_setup-cli.md')
 export const SETUP_LOGIN = readPrompt('_setup-login.md')
+export const GUIDE_INSTRUCTION = readPrompt('_guide-instruction.md')
 
 const fragments: Record<string, string> = {
   REQUIREMENTS_CHECK,
   ERROR_HANDLING_GUIDE,
+  GUIDE_INSTRUCTION,
 }
 
 // ─── 전체 프롬프트 (조각 합성 완료) ───
