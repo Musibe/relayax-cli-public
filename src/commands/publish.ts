@@ -903,8 +903,10 @@ export function registerPublish(program: Command): void {
             console.log(guideUrl)
             console.log('```')
 
-            console.log(`\n  \x1b[90m이미 relay를 쓰는 사용자는 이렇게만 하면 됩니다:\x1b[0m`)
-            console.log(`  /relay-install ${result.slug}`)
+            console.log(`\n  \x1b[90m이미 relay를 쓰는 사용자는 이렇게만 하면 됩니다:\x1b[0m\n`)
+            console.log('```')
+            console.log(`/relay-install ${result.slug}`)
+            console.log('```')
 
             if (config.visibility === 'private') {
               console.log(`\n  \x1b[90mprivate 에이전트:\x1b[0m`)
