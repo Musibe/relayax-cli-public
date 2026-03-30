@@ -2,6 +2,8 @@ import http from 'http'
 import { Command } from 'commander'
 import { execSync } from 'child_process'
 import { ensureGlobalRelayDir, saveTokenData, API_URL } from '../lib/config.js'
+import { reportCliError } from '../lib/error-report.js'
+import { trackCommand } from '../lib/step-tracker.js'
 
 function openBrowser(url: string): boolean {
   const platform = process.platform
@@ -215,6 +217,7 @@ export function registerLogin(program: Command): void {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       ensureGlobalRelayDir()
+      trackCommand('login')
 
       let accessToken = opts.token
       let refreshToken: string | undefined
@@ -230,6 +233,7 @@ export function registerLogin(program: Command): void {
           expiresAt = loginResult.expires_at
         } catch (err) {
           const msg = err instanceof Error ? err.message : '로그인 실패'
+          reportCliError('login', 'LOGIN_FAILED', msg)
           if (json) {
             console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: opts.device ? '다시 시도하세요.' : 'relay login --device를 시도하세요.' }))
           } else {

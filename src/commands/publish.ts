@@ -8,6 +8,8 @@ import { API_URL, getValidToken } from '../lib/config.js'
 import { generatePreamble, generatePreambleBin } from '../lib/preamble.js'
 import { checkCliVersion } from '../lib/version-check.js'
 import { resolveProjectPath } from '../lib/paths.js'
+import { reportCliError } from '../lib/error-report.js'
+import { trackCommand } from '../lib/step-tracker.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -447,6 +449,8 @@ export function registerPublish(program: Command): void {
       const relayYamlPath = path.join(relayDir, 'relay.yaml')
       const isTTY = Boolean(process.stdin.isTTY) && !json
 
+      trackCommand('publish', { slug: undefined })
+
       // CLI update check before publish
       if (isTTY) {
         const cliUpdate = await checkCliVersion(true)
@@ -461,6 +465,7 @@ export function registerPublish(program: Command): void {
               default: true,
             })
             if (!shouldContinue) {
+              reportCliError('publish', 'CANCELLED_CLI_UPDATE', `current:${cliUpdate.current} latest:${cliUpdate.latest}`)
               console.error('\n배포를 취소했습니다. CLI를 업데이트한 후 다시 시도하세요.')
               process.exit(0)
             }
@@ -474,6 +479,7 @@ export function registerPublish(program: Command): void {
       // Check .relay/relay.yaml exists
       if (!fs.existsSync(relayYamlPath)) {
         if (!isTTY) {
+          reportCliError('publish', 'NOT_INITIALIZED', 'relay.yaml missing')
           console.error(JSON.stringify({
             error: 'NOT_INITIALIZED',
             message: '.relay/relay.yaml이 없습니다. 먼저 `relay create`를 실행하세요.',
@@ -551,6 +557,7 @@ export function registerPublish(program: Command): void {
       const config = parseRelayYaml(yamlContent)
 
       if (!config.slug || !config.name || !config.description) {
+        reportCliError('publish', 'INVALID_CONFIG', 'missing name/slug/description')
         console.error(JSON.stringify({
           error: 'INVALID_CONFIG',
           message: 'relay.yaml에 name, slug, description이 필요합니다.',
@@ -598,6 +605,7 @@ export function registerPublish(program: Command): void {
         return fs.readdirSync(dirPath).filter((f) => !f.startsWith('.')).length > 0
       })
       if (!hasDirs) {
+        reportCliError('publish', 'EMPTY_PACKAGE', 'no content dirs found')
         console.error(JSON.stringify({
           error: 'EMPTY_PACKAGE',
           message: '.relay/ 안에 skills/, agents/, rules/, commands/ 중 하나 이상에 파일이 있어야 합니다.',
@@ -609,6 +617,7 @@ export function registerPublish(program: Command): void {
       // Get token (checked before tarball creation)
       const token = opts.token ?? process.env.RELAY_TOKEN ?? await getValidToken()
       if (!token) {
+        reportCliError('publish', 'NO_TOKEN', 'auth required')
         console.error(JSON.stringify({
           error: 'NO_TOKEN',
           message: '인증이 필요합니다. `relay login`을 먼저 실행하세요.',
@@ -641,6 +650,7 @@ export function registerPublish(program: Command): void {
             } else {
               console.error(`Organization '${opts.space}'를 찾을 수 없습니다.`)
             }
+            reportCliError('publish', 'INVALID_ORG', `org:${opts.space}`)
             process.exit(1)
           }
         } else if (isTTY) {
@@ -672,6 +682,7 @@ export function registerPublish(program: Command): void {
           }
         } else if (orgs.length > 1 && json) {
           // --json 모드 + 여러 Org: 에이전트가 선택할 수 있도록 에러 반환
+          reportCliError('publish', 'MISSING_ORG', 'multiple orgs, none selected')
           console.error(JSON.stringify({
             error: 'MISSING_ORG',
             message: '배포할 Organization을 선택하세요.',
@@ -720,6 +731,7 @@ export function registerPublish(program: Command): void {
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
           console.error(`  → relay.yaml에 visibility: ${config.visibility} 저장됨\n`)
         } else {
+          reportCliError('publish', 'MISSING_VISIBILITY', 'visibility not set in relay.yaml')
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
             message: 'relay.yaml에 visibility를 설정해주세요.',
@@ -907,6 +919,7 @@ export function registerPublish(program: Command): void {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        reportCliError('publish', 'PUBLISH_FAILED', message)
         console.error(JSON.stringify({ error: 'PUBLISH_FAILED', message, fix: message }))
         process.exit(1)
       } finally {

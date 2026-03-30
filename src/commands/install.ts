@@ -9,6 +9,8 @@ import { resolveSlug } from '../lib/slug.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
 import { hasGlobalUserCommands, installGlobalUserCommands } from './init.js'
 import { resolveProjectPath } from '../lib/paths.js'
+import { reportCliError } from '../lib/error-report.js'
+import { trackCommand } from '../lib/step-tracker.js'
 
 export function registerInstall(program: Command): void {
   program
@@ -28,6 +30,8 @@ export function registerInstall(program: Command): void {
         }
         installGlobalUserCommands()
       }
+
+      trackCommand('install', { slug: slugInput })
 
       try {
         // Resolve scoped slug and fetch agent metadata
@@ -260,6 +264,7 @@ export function registerInstall(program: Command): void {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        reportCliError('install', 'INSTALL_FAILED', message)
         console.error(JSON.stringify({ error: 'INSTALL_FAILED', message, fix: message }))
         process.exit(1)
       } finally {

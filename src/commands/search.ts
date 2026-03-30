@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { searchAgents } from '../lib/api.js'
+import { trackCommand } from '../lib/step-tracker.js'
 import type { SearchResult } from '../types.js'
 
 function formatTable(results: SearchResult[]): string {
@@ -39,6 +40,7 @@ export function registerSearch(program: Command): void {
     .option('--space <space>', '특정 Space 내에서 검색')
     .action(async (keyword: string, opts: { tag?: string; space?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
+      trackCommand('search', { slug: keyword })
       try {
         const results = await searchAgents(keyword, opts.tag)
         if (json) {

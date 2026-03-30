@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { getValidToken, API_URL } from '../lib/config.js'
+import { trackCommand } from '../lib/step-tracker.js'
 import { hasGlobalUserCommands } from './init.js'
 
 export async function joinOrg(orgSlug: string, code: string): Promise<{ type: string; role?: string }> {
@@ -38,6 +39,7 @@ export function registerJoin(program: Command): void {
     .requiredOption('--code <code>', '초대 코드 (UUID)')
     .action(async (slug: string, opts: { code: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
+      trackCommand('join', { slug })
 
       if (!hasGlobalUserCommands()) {
         if (!json) {

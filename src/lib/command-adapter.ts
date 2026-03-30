@@ -27,6 +27,7 @@ const ENV_PREAMBLE = `## 환경 감지
 | \`relay uninstall <slug>\` | \`relay_uninstall\` tool 호출 |
 | \`relay package --init\` | \`relay_scan\` tool 호출 |
 | \`relay publish\` | \`relay_publish\` tool 호출 |
+| \`relay login\` | \`relay_login\` tool 호출 |
 
 **중요**: 이후 지시에서 \`relay <명령어>\`로 표기된 것은 판별된 환경에 따라 변환하여 실행하세요.
 

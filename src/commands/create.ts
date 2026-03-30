@@ -3,6 +3,7 @@ import path from 'path'
 import { Command } from 'commander'
 import yaml from 'js-yaml'
 import { detectAgentCLIs } from '../lib/ai-tools.js'
+import { trackCommand } from '../lib/step-tracker.js'
 import {
   createAdapter,
   BUILDER_COMMANDS,
@@ -33,6 +34,7 @@ export function registerCreate(program: Command): void {
     .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
     .action(async (name: string, opts: { description?: string; slug?: string; tags?: string; visibility?: string; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
+      trackCommand('create')
       const projectPath = resolveProjectPath(opts.project)
       const relayDir = path.join(projectPath, '.relay')
       const relayYamlPath = path.join(relayDir, 'relay.yaml')

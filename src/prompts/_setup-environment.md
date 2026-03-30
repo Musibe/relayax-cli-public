@@ -58,7 +58,7 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null
 | "relay status" | `relay status` | `relay_status` tool 호출 |
 | "relay install X" | `relay install X` | `relay_install` tool 호출 (`slug: "X"`) |
 | "relay publish" | `relay publish` | `relay_publish` tool 호출 |
-| "relay login" | `relay login` | 사용자에게 터미널에서 `npx relayax-cli login --device` 안내 |
+| "relay login" | `relay login` | `relay_login` tool 호출 |
 | "relay scan" | `relay package --init` | `relay_scan` tool 호출 |
 
 처음 판별한 환경을 이후 계속 사용합니다.

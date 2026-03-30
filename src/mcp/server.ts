@@ -266,6 +266,63 @@ export function createMcpServer(): McpServer {
     }
   })
 
+  // ═══ relay_login — device code 로그인 ═══
+
+  server.tool('relay_login', 'Device Code 방식으로 로그인합니다. URL과 코드를 사용자에게 보여주고, 승인을 기다립니다.', {}, async () => {
+    try {
+      // 이미 로그인되어 있는지 확인
+      const existingToken = await getValidToken()
+      if (existingToken) {
+        const username = await resolveUsername(existingToken)
+        return { content: [jsonText({ status: 'already_authenticated', username })] }
+      }
+
+      // Device code 발급
+      const res = await fetch(`${API_URL}/api/auth/device/request`, { method: 'POST' })
+      if (!res.ok) throw new Error('Device code 발급에 실패했습니다')
+
+      const { device_code, user_code, verification_url, expires_in } = await res.json() as {
+        device_code: string; user_code: string; verification_url: string; expires_in: number
+      }
+
+      // 브라우저 열기 시도
+      try {
+        const { execSync } = await import('child_process')
+        if (process.platform === 'darwin') execSync(`open "${verification_url}?user_code=${user_code}"`, { stdio: 'ignore' })
+        else if (process.platform === 'win32') execSync(`start "" "${verification_url}?user_code=${user_code}"`, { stdio: 'ignore' })
+        else execSync(`xdg-open "${verification_url}?user_code=${user_code}"`, { stdio: 'ignore' })
+      } catch { /* 브라우저 열기 실패 — 사용자가 직접 열어야 함 */ }
+
+      // Polling (최대 expires_in 초, 5초 간격)
+      const deadline = Date.now() + expires_in * 1000
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000))
+        const pollRes = await fetch(`${API_URL}/api/auth/device/poll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_code }),
+        })
+        if (!pollRes.ok) continue
+        const data = await pollRes.json() as { status: string; token?: string; refresh_token?: string; expires_at?: string }
+        if (data.status === 'approved' && data.token) {
+          const { saveTokenData, ensureGlobalRelayDir } = await import('../lib/config.js')
+          ensureGlobalRelayDir()
+          saveTokenData({
+            access_token: data.token,
+            refresh_token: data.refresh_token,
+            expires_at: data.expires_at ? Number(data.expires_at) : undefined,
+          })
+          const username = await resolveUsername(data.token)
+          return { content: [jsonText({ status: 'ok', message: '로그인 완료', username })] }
+        }
+      }
+
+      return { content: [jsonText({ status: 'timeout', verification_url, user_code, message: `브라우저에서 ${verification_url} 을 열고 코드 ${user_code} 를 입력해주세요.` })], isError: true }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
   // ═══ relay_init — slash command 설치 ═══
 
   server.tool('relay_init', 'relay slash command를 설치합니다 (/relay-install, /relay-publish 등)', {}, async () => {
