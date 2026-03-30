@@ -99,14 +99,16 @@ export async function resolveSlugFromServer(name: string): Promise<ResolvedSlug[
   return data.results
 }
 
-export async function sendUsagePing(agentId: string, slug: string, version?: string): Promise<void> {
+export async function sendUsagePing(agentId: string | null, slug: string, version?: string): Promise<void> {
   const { createHash } = await import('crypto')
   const { hostname, userInfo } = await import('os')
   const deviceHash = createHash('sha256')
     .update(`${hostname()}:${userInfo().username}`)
     .digest('hex')
 
-  const url = `${API_URL}/api/agents/${agentId}/ping`
+  // agentId(UUID)가 있으면 UUID 경로, 없으면 slug name으로 fallback
+  const pathParam = agentId || slug.replace(/^@/, '').split('/').pop() || slug
+  const url = `${API_URL}/api/agents/${pathParam}/ping`
   const payload: Record<string, string> = { device_hash: deviceHash, slug }
   if (version) payload.installed_version = version
 
@@ -118,6 +120,7 @@ export async function sendUsagePing(agentId: string, slug: string, version?: str
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(5000),
   }).catch(() => {
     // fire-and-forget: ignore errors
   })

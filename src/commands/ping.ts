@@ -31,10 +31,8 @@ export function registerPing(program: Command): void {
       const version = entry?.version
       const agentId = entry?.agent_id
 
-      // Fire-and-forget ping (agent_id 기반, 없으면 skip)
-      if (agentId) {
-        await sendUsagePing(agentId, slug, version)
-      }
+      // Fire-and-forget ping (agent_id 없어도 slug fallback으로 전송)
+      await sendUsagePing(agentId ?? null, slug, version)
 
       if (!opts.quiet) {
         console.log(`RELAY_READY: ${slug}`)

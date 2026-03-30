@@ -6,7 +6,7 @@ import { searchAgents, fetchAgentInfo, reportInstall, sendUsagePing } from '../l
 import { resolveSlug } from '../lib/slug.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
 import { detectAgentCLIs, detectMountedCLIs, scanLocalItems, scanGlobalItems, scanMountedItems } from '../lib/ai-tools.js'
-import { injectPreambleToAgent } from '../lib/preamble.js'
+import { injectPreambleToAgent, generatePreambleBin } from '../lib/preamble.js'
 import { uninstallAgent } from '../lib/installer.js'
 import { resolveProjectPath, resolveHome } from '../lib/paths.js'
 // prompts are used in MCP Prompt definitions below
@@ -178,14 +178,32 @@ export function createMcpServer(): McpServer {
     })] }
   })
 
-  server.tool('relay_check_update', 'CLI 및 에이전트 업데이트를 확인합니다', {}, async () => {
-    const { checkCliVersion, checkAllAgents } = await import('../lib/version-check.js')
-    const cliUpdate = await checkCliVersion(true)
-    const agentUpdates = await checkAllAgents(true)
+  server.tool('relay_check_update', 'CLI 및 에이전트 업데이트를 확인합니다. slug 지정 시 해당 에이전트만 체크하며 사용 현황도 기록합니다 (preamble 대체).', {
+    slug: z.string().optional().describe('특정 에이전트 slug (예: @owner/name). 생략하면 전체 체크'),
+  }, async ({ slug: slugInput }) => {
+    const { checkCliVersion, checkAgentVersion, checkAllAgents } = await import('../lib/version-check.js')
 
+    // slug가 지정되면 해당 에이전트의 usage ping도 함께 전송
+    if (slugInput) {
+      const local = loadInstalled()
+      const global = loadGlobalInstalled()
+      const entry = local[slugInput] ?? global[slugInput]
+      const agentId = entry?.agent_id ?? null
+      const version = entry?.version
+      sendUsagePing(agentId, slugInput, version)
+    }
+
+    const cliUpdate = await checkCliVersion(true)
     const updates = []
     if (cliUpdate) updates.push({ type: 'cli', current: cliUpdate.current, latest: cliUpdate.latest })
-    for (const u of agentUpdates) updates.push({ type: 'agent', slug: u.slug, current: u.current, latest: u.latest })
+
+    if (slugInput) {
+      const agentUpdate = await checkAgentVersion(slugInput, true)
+      if (agentUpdate) updates.push({ type: 'agent', slug: agentUpdate.slug, current: agentUpdate.current, latest: agentUpdate.latest })
+    } else {
+      const agentUpdates = await checkAllAgents(true)
+      for (const u of agentUpdates) updates.push({ type: 'agent', slug: u.slug, current: u.current, latest: u.latest })
+    }
 
     if (updates.length === 0) {
       return { content: [jsonText({ status: 'up_to_date', message: '모두 최신 버전입니다.', cli_version: pkg.version })] }
@@ -241,6 +259,9 @@ export function createMcpServer(): McpServer {
 
       const cfg = yaml.load(fs.readFileSync(relayYaml, 'utf-8')) as Record<string, unknown>
       const { createTarball, publishToApi } = await import('../commands/publish.js')
+
+      // Generate bin/relay-preamble.sh (CLI publish와 동일하게)
+      generatePreambleBin(relayDir, cfg.slug as string, API_URL)
 
       const tarPath = await createTarball(relayDir)
       try {

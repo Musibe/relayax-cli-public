@@ -60,5 +60,6 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json 2>/dev/null
 | "relay publish" | `relay publish` | `relay_publish` tool 호출 |
 | "relay login" | `relay login` | `relay_login` tool 호출 |
 | "relay scan" | `relay package --init` | `relay_scan` tool 호출 |
+| "relay check-update X" | `relay check-update X` | `relay_check_update` tool 호출 (`slug: "X"`) |
 
 처음 판별한 환경을 이후 계속 사용합니다.

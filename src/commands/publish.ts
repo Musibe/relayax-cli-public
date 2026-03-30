@@ -284,6 +284,7 @@ function generateEntryCommand(
   commands: CommandEntry[],
   skills: { name: string; description: string }[],
   scopedSlug: string,
+  agentDir: string,
 ): string {
   const lines: string[] = []
 
@@ -294,7 +295,7 @@ function generateEntryCommand(
   lines.push('')
 
   // Preamble
-  lines.push(generatePreamble(scopedSlug))
+  lines.push(generatePreamble(scopedSlug, agentDir))
   lines.push('')
 
   // Agent header
@@ -846,6 +847,7 @@ export function registerPublish(program: Command): void {
         detectedCommands,
         detectedSkills,
         config.slug,
+        relayDir,
       )
       const commandsDir = path.join(relayDir, 'commands')
       if (!fs.existsSync(commandsDir)) {
@@ -873,7 +875,7 @@ export function registerPublish(program: Command): void {
             const entryFile = path.join(relayDir, 'commands', serverSlug.replace('/', '-') + '.md')
             if (fs.existsSync(entryFile)) {
               const { injectPreamble } = await import('../lib/preamble.js')
-              injectPreamble(entryFile, result.slug)
+              injectPreamble(entryFile, result.slug, relayDir)
             }
           }
         } catch {
