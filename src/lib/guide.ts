@@ -1,5 +1,6 @@
 import type { Requires } from '../commands/publish.js'
-import { REQUIREMENTS_CHECK, SETUP_CLI, SETUP_LOGIN } from '../prompts/index.js'
+import { REQUIREMENTS_CHECK, SETUP_ENVIRONMENT, SETUP_CLI, SETUP_LOGIN } from '../prompts/index.js'
+
 
 function buildSetupSection(needsLogin: boolean): string {
   if (!needsLogin) return SETUP_CLI
@@ -100,18 +101,17 @@ ${commands.map((cmd) => `- \`/${cmd.name}\`: ${cmd.description}`).join('\n')}
 > ${config.description}
 
 이 가이드는 Relay 에이전트를 설치하는 절차입니다.
-각 Step의 명령어를 순서대로 실행하세요. 요약하지 말고 바로 Step 1부터 시작하세요.
+각 Step의 명령어를 순서대로 실행하세요. 요약하지 말고 바로 Step 0(환경 감지)부터 시작하세요.
 
-터미널(bash)을 실행할 수 없는 환경이라면, 아래 도구에서 이 URL을 열고 실행하세요:
-Claude Code · Claude Cowork · Codex · Cursor · Antigravity
+${SETUP_ENVIRONMENT}
 
 ${setupSection}
 
 ## Step ${installStepNum}. 에이전트 설치
 
-\`\`\`bash
-relay install ${scopedSlug}
-\`\`\`
+감지된 환경에 맞게 실행하세요:
+- 환경 A (터미널): \`relay install ${scopedSlug}\`
+- 환경 B (샌드박스): \`npx relayax-cli install ${scopedSlug}\`
 
 설치 후 아래 의존성을 확인하고 환경을 구성합니다.
 

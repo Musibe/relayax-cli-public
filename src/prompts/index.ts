@@ -12,6 +12,7 @@ function interpolate(template: string, vars: Record<string, string>): string {
 // ─── 공유 조각 ───
 export const REQUIREMENTS_CHECK = readPrompt('_requirements-check.md')
 export const ERROR_HANDLING_GUIDE = readPrompt('_error-handling.md')
+export const SETUP_ENVIRONMENT = readPrompt('_setup-environment.md')
 export const SETUP_CLI = readPrompt('_setup-cli.md')
 export const SETUP_LOGIN = readPrompt('_setup-login.md')
 

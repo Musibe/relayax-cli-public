@@ -7,8 +7,10 @@ import yaml from 'js-yaml'
 import {
   detectAgentCLIs,
   detectGlobalCLIs,
+  detectMountedCLIs,
   scanLocalItems,
   scanGlobalItems,
+  scanMountedItems,
   type ContentItem,
 } from '../lib/ai-tools.js'
 import { resolveProjectPath, resolveHome } from '../lib/paths.js'
@@ -397,6 +399,19 @@ export function registerPackage(program: Command): void {
               path: `~/${tool.skillsDir}`,
               location: 'global',
               name: `${tool.name} (global)`,
+              items,
+            })
+          }
+        }
+
+        // 마운트 경로 스캔 (Cowork/sandbox 환경)
+        for (const { tool, basePath } of detectMountedCLIs()) {
+          const items = scanMountedItems(basePath, tool)
+          if (items.length > 0) {
+            sources.push({
+              path: `${basePath}/${tool.skillsDir}`,
+              location: 'global',
+              name: `${tool.name} (mounted)`,
               items,
             })
           }

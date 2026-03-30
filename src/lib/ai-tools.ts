@@ -49,6 +49,32 @@ export function detectAgentCLIs(projectPath: string): AITool[] {
 }
 
 /**
+ * Cowork/sandbox 환경의 마운트 경로 후보를 반환한다.
+ * /sessions/<id>/mnt/ 같은 경로에 실제 파일이 마운트됨.
+ */
+export function detectMountPaths(): string[] {
+  const home = os.homedir()
+  const mntPath = path.join(home, 'mnt')
+  if (!fs.existsSync(mntPath)) return []
+  return [mntPath]
+}
+
+/**
+ * 마운트 경로에서 에이전트 CLI 디렉토리를 감지한다.
+ */
+export function detectMountedCLIs(): { tool: AITool; basePath: string }[] {
+  const results: { tool: AITool; basePath: string }[] = []
+  for (const mnt of detectMountPaths()) {
+    for (const tool of AI_TOOLS) {
+      if (fs.existsSync(path.join(mnt, tool.skillsDir))) {
+        results.push({ tool, basePath: mnt })
+      }
+    }
+  }
+  return results
+}
+
+/**
  * 홈 디렉토리에서 글로벌 에이전트 CLI 디렉토리를 감지한다.
  * ~/{skillsDir}/ 가 존재하는 CLI를 반환.
  */
@@ -117,4 +143,11 @@ export function scanLocalItems(projectPath: string, tool: AITool): ContentItem[]
 export function scanGlobalItems(tool: AITool, home?: string): ContentItem[] {
   const basePath = path.join(home ?? os.homedir(), tool.skillsDir)
   return scanItemsIn(basePath)
+}
+
+/**
+ * 마운트 경로의 개별 스킬/에이전트/커맨드/룰 항목을 반환한다.
+ */
+export function scanMountedItems(basePath: string, tool: AITool): ContentItem[] {
+  return scanItemsIn(path.join(basePath, tool.skillsDir))
 }
