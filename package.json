@@ -1,6 +1,6 @@
 {
   "name": "relayax-cli",
-  "version": "0.3.50",
+  "version": "0.3.51",
   "description": "RelayAX Agent Team Marketplace CLI - Install and manage agent teams",
   "main": "dist/index.js",
   "bin": {
