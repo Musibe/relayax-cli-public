@@ -5,7 +5,7 @@ import { Command } from 'commander'
 import { fetchAgentInfo, fetchAgentVersions, reportInstall } from '../lib/api.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
 import { uninstallAgent, deploySymlinks, removeSymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
-import { getInstallPath, loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken } from '../lib/config.js'
+import { loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken } from '../lib/config.js'
 import { resolveSlug, isScopedSlug, parseSlug } from '../lib/slug.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
 import { resolveProjectPath } from '../lib/paths.js'
@@ -18,7 +18,6 @@ export function registerUpdate(program: Command): void {
     .option('--code <code>', '초대 코드 (비공개 에이전트 업데이트 시 필요)')
     .action(async (slugInput: string, opts: { path?: string; code?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
-      const installPath = getInstallPath(opts.path)
       const tempDir = makeTempDir()
 
       const projectPath = resolveProjectPath(opts.path)
@@ -93,7 +92,7 @@ export function registerUpdate(program: Command): void {
         injectPreambleToAgent(agentDir, slug)
 
         // Deploy symlinks (always — handles migration from legacy deployed_files)
-        const deploy = deploySymlinks(agentDir, slug, currentScope, projectPath)
+        const deploy = deploySymlinks(agentDir, currentScope, projectPath)
 
         // Update installed.json
         const installRecord = {

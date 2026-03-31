@@ -268,7 +268,7 @@ export function registerInstall(program: Command): void {
         injectPreambleToAgent(agentDir, slug)
 
         // 5. Deploy symlinks to detected AI tool directories
-        const deploy = deploySymlinks(agentDir, slug, scope, projectPath)
+        const deploy = deploySymlinks(agentDir, scope, projectPath)
         for (const w of deploy.warnings) {
           if (!json) console.error(`\x1b[33m${w}\x1b[0m`)
         }

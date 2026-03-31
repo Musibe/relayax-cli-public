@@ -3,7 +3,7 @@ import os from 'os'
 import path from 'path'
 import { execSync } from 'child_process'
 import { detectGlobalCLIs, detectAgentCLIs } from './ai-tools.js'
-import type { Requires, RequiresEnv, RequiresMcp, RequiresCli, RequiresNpm } from '../commands/publish.js'
+import type { Requires, RequiresEnv, RequiresMcp } from '../commands/publish.js'
 
 const COPY_DIRS = ['skills', 'agents', 'rules', 'commands'] as const
 const SYMLINK_DIRS = ['skills', 'commands', 'agents', 'rules'] as const
@@ -26,7 +26,6 @@ export interface DeployResult {
  */
 export function deploySymlinks(
   agentDir: string,
-  slug: string,
   scope: 'global' | 'local',
   projectPath: string,
 ): DeployResult {
@@ -94,7 +93,6 @@ export function deploySymlinks(
 
 function isSymlink(p: string): boolean {
   try {
-    fs.lstatSync(p)
     return fs.lstatSync(p).isSymbolicLink()
   } catch {
     return false
