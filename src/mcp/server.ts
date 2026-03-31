@@ -705,6 +705,28 @@ export function createMcpServer(): McpServer {
     }
   })
 
+  // ═══ relay_guide — 에이전트 설치 가이드 조회 ═══
+
+  server.tool('relay_guide', '에이전트 설치 가이드를 조회합니다. URL을 fetch할 수 없는 샌드박스 환경에서 사용하세요.', {
+    slug: z.string().describe('에이전트 slug (예: @owner/name)'),
+    code: z.string().optional().describe('접근 코드 (비공개 에이전트용)'),
+  }, async ({ slug: slugInput, code }) => {
+    try {
+      const parsed = await resolveSlug(slugInput)
+      let url = `${API_URL}/api/registry/${parsed.owner}/${parsed.name}/guide.md`
+      if (code) url += `?code=${encodeURIComponent(code)}`
+      const res = await fetch(url)
+      if (!res.ok) {
+        if (res.status === 404) throw new Error('에이전트를 찾을 수 없습니다.')
+        throw new Error(`가이드를 가져올 수 없습니다 (${res.status})`)
+      }
+      const guide = await res.text()
+      return { content: [{ type: 'text' as const, text: guide }] }
+    } catch (err) {
+      return { content: [jsonText({ error: String(err) })], isError: true }
+    }
+  })
+
   // ═══ relay_init — slash command 설치 ═══
 
   server.tool('relay_init', 'relay slash command를 설치합니다 (/relay-install, /relay-publish 등)', {}, async () => {
