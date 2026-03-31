@@ -1,122 +1,62 @@
 import type { Requires } from '../commands/publish.js'
-import { REQUIREMENTS_CHECK, SETUP_ENVIRONMENT, SETUP_CLI, SETUP_LOGIN } from '../prompts/index.js'
-
-
-function buildSetupSection(needsLogin: boolean): string {
-  if (!needsLogin) return SETUP_CLI
-  return `${SETUP_CLI}\n\n${SETUP_LOGIN}`
-}
-
-function buildRequiresSummary(requires: Requires): string {
-  const lines: string[] = []
-
-  if (requires.cli && requires.cli.length > 0) {
-    for (const cli of requires.cli) {
-      const label = cli.required === false ? '선택' : '필수'
-      lines.push(`- cli: **${cli.name}** (${label})${cli.install ? ` — \`${cli.install}\`` : ''}`)
-    }
-  }
-
-  if (requires.npm && requires.npm.length > 0) {
-    const pkgNames = requires.npm.map((p) => typeof p === 'string' ? p : p.name)
-    lines.push(`- npm: ${pkgNames.map((n) => `**${n}**`).join(', ')}`)
-  }
-
-  if (requires.env && requires.env.length > 0) {
-    for (const env of requires.env) {
-      const label = env.required === false ? '선택' : '필수'
-      const desc = env.description ? ` — ${env.description}` : ''
-      lines.push(`- env: **${env.name}** (${label})${desc}`)
-    }
-  }
-
-  if (requires.mcp && requires.mcp.length > 0) {
-    for (const mcp of requires.mcp) {
-      const pkg = mcp.package ? ` — \`${mcp.package}\`` : ''
-      lines.push(`- mcp: **${mcp.name}**${pkg}`)
-    }
-  }
-
-  if (requires.agents && requires.agents.length > 0) {
-    for (const agent of requires.agents) {
-      lines.push(`- agents: **${agent}**`)
-    }
-  }
-
-  if (requires.permissions && requires.permissions.length > 0) {
-    lines.push(`- permissions: ${requires.permissions.map((p) => `\`${p}\``).join(', ')}`)
-  }
-
-  return lines.join('\n')
-}
-
-function buildRequiresSection(requires: Requires): string {
-  const summary = buildRequiresSummary(requires)
-  if (!summary) return ''
-
-  return `## Step 4. 의존성 확인 및 설치
-
-이 에이전트는 아래 의존성이 필요합니다:
-
-${summary}
-
-${REQUIREMENTS_CHECK}
-`
-}
 
 interface CommandEntry {
   name: string
   description: string
 }
 
+function buildRequiresSummary(requires: Requires): string {
+  const lines: string[] = []
+  for (const cli of requires.cli ?? []) {
+    const label = cli.required === false ? '선택' : '필수'
+    lines.push(`- cli: **${cli.name}** (${label})${cli.install ? ` — \`${cli.install}\`` : ''}`)
+  }
+  if (requires.npm && requires.npm.length > 0) {
+    const names = requires.npm.map((p) => typeof p === 'string' ? p : p.name)
+    lines.push(`- npm: ${names.map((n) => `**${n}**`).join(', ')}`)
+  }
+  for (const env of requires.env ?? []) {
+    const label = env.required === false ? '선택' : '필수'
+    const desc = env.description ? ` — ${env.description}` : ''
+    lines.push(`- env: **${env.name}** (${label})${desc}`)
+  }
+  for (const mcp of requires.mcp ?? []) {
+    const pkg = mcp.package ? ` — \`${mcp.package}\`` : ''
+    lines.push(`- mcp: **${mcp.name}**${pkg}`)
+  }
+  for (const agent of requires.agents ?? []) {
+    lines.push(`- agent: **${agent}**`)
+  }
+  return lines.join('\n')
+}
+
 export function generateGuide(
-  config: { slug: string; name: string; description: string; version: string; visibility?: string },
+  config: { slug: string; name: string; description: string; version: string },
   commands: CommandEntry[],
   requires?: Requires,
 ): string {
   const scopedSlug = config.slug.startsWith('@') ? config.slug : `@${config.slug}`
-  const needsLogin = config.visibility === 'internal' || config.visibility === 'private'
-  const setupSection = buildSetupSection(needsLogin)
-  const installStepNum = needsLogin ? 3 : 2
+  const installCmd = `npx relayax-cli install ${scopedSlug}`
 
-  const requiresSection = requires ? buildRequiresSection(requires) : ''
-  const requiresSectionFinal = requiresSection
-    ? requiresSection.replace('## Step 4.', `## Step ${installStepNum + 1}.`)
-    : ''
+  const requiresSummary = requires ? buildRequiresSummary(requires) : ''
 
-  let usageHint = ''
-  if (commands.length > 0) {
-    usageHint = `## 사용법
-
-설치가 완료되면 아래 커맨드를 사용할 수 있습니다:
-
-${commands.map((cmd) => `- \`/${cmd.name}\`: ${cmd.description}`).join('\n')}
-
-원하는 작업을 말하거나 위 커맨드를 직접 실행하세요.
-`
-  }
-
-  return `# ${config.name} — 설치 가이드
+  return `# ${config.name}
 
 > ${config.description}
 
-이 가이드는 Relay 에이전트를 설치하는 절차입니다.
-각 Step의 명령어를 순서대로 실행하세요. 요약하지 말고 바로 Step 0(환경 감지)부터 시작하세요.
+## 설치
 
-${SETUP_ENVIRONMENT}
+\`\`\`bash
+${installCmd}
+\`\`\`
 
-${setupSection}
+${commands.length > 0 ? `## 포함된 커맨드
 
-## Step ${installStepNum}. 에이전트 설치
+${commands.map((cmd) => `- \`/${cmd.name}\`: ${cmd.description}`).join('\n')}
+` : ''}${requiresSummary ? `## 요구사항
 
-감지된 환경에 맞게 실행하세요:
-- 환경 A (터미널): \`relay install ${scopedSlug}\`
-- 환경 B (샌드박스): \`npx relayax-cli install ${scopedSlug}\`
-
-설치 후 아래 의존성을 확인하고 환경을 구성합니다.
-
-${requiresSectionFinal}${usageHint}---
-*출처: https://relayax.com — Agent Marketplace*
-*설치: \`relay install ${scopedSlug}\`*
+${requiresSummary}
+` : ''}---
+*https://relayax.com — Agent Marketplace*
 `
 }

@@ -10,7 +10,7 @@ import { checkCliVersion } from '../lib/version-check.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
-import { GUIDE_INSTRUCTION } from '../prompts/index.js'
+// GUIDE_INSTRUCTION removed — share text now uses npx install command directly
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -109,6 +109,7 @@ interface RelayYaml {
   visibility?: 'public' | 'private' | 'internal'
   type?: 'command' | 'passive' | 'hybrid'
   source?: string
+  org_slug?: string
 }
 
 function parseRelayYaml(content: string): RelayYaml {
@@ -146,6 +147,7 @@ function parseRelayYaml(content: string): RelayYaml {
     visibility,
     type,
     source: raw.source ? String(raw.source) : undefined,
+    org_slug: raw.org_slug ? String(raw.org_slug) : undefined,
   }
 }
 
@@ -442,9 +444,13 @@ export function registerPublish(program: Command): void {
     .description('현재 에이전트 패키지를 Space에 배포합니다 (relay.yaml 필요)')
     .option('--token <token>', '인증 토큰')
     .option('--space <slug>', '배포할 Space 지정')
+    .option('--org <slug>', 'Organization slug 지정')
     .option('--version <version>', '배포 버전 지정 (relay.yaml 업데이트)')
+    .option('--patch', 'patch 버전 범프')
+    .option('--minor', 'minor 버전 범프')
+    .option('--major', 'major 버전 범프')
     .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
-    .action(async (opts: { token?: string; space?: string; version?: string; project?: string }) => {
+    .action(async (opts: { token?: string; space?: string; org?: string; version?: string; patch?: boolean; minor?: boolean; major?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const agentDir = resolveProjectPath(opts.project)
       const relayDir = path.join(agentDir, '.relay')
@@ -460,21 +466,6 @@ export function registerPublish(program: Command): void {
           console.error(`\n\x1b[33m⚠ relay v${cliUpdate.latest}이 있습니다\x1b[0m (현재 v${cliUpdate.current})`)
           console.error('  최신 버전에서는 설치자에게 자동 업데이트 알림이 지원됩니다.')
           console.error(`  업데이트: \x1b[36mnpm update -g relayax-cli\x1b[0m\n`)
-          try {
-            const { confirm } = await import('@inquirer/prompts')
-            const shouldContinue = await confirm({
-              message: '현재 버전으로 계속 배포할까요?',
-              default: true,
-            })
-            if (!shouldContinue) {
-              reportCliError('publish', 'CANCELLED_CLI_UPDATE', `current:${cliUpdate.current} latest:${cliUpdate.latest}`)
-              console.error('\n배포를 취소했습니다. CLI를 업데이트한 후 다시 시도하세요.')
-              process.exit(0)
-            }
-            console.error('')
-          } catch {
-            // non-interactive fallback: continue
-          }
         }
       }
 
@@ -568,12 +559,30 @@ export function registerPublish(program: Command): void {
         process.exit(1)
       }
 
-      // Version bump: --version flag takes priority
+      // Version bump: --version flag takes priority, then --patch/--minor/--major
+      const hasBumpFlag = Boolean(opts.patch || opts.minor || opts.major)
       if (opts.version) {
         config.version = opts.version
         const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
         yamlData.version = opts.version
         fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
+      } else if (hasBumpFlag) {
+        const [major, minor, patch] = config.version.split('.').map(Number)
+        let newVersion: string
+        if (opts.major) {
+          newVersion = `${major + 1}.0.0`
+        } else if (opts.minor) {
+          newVersion = `${major}.${minor + 1}.0`
+        } else {
+          newVersion = `${major}.${minor}.${patch + 1}`
+        }
+        config.version = newVersion
+        const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
+        yamlData.version = newVersion
+        fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
+        if (!json) {
+          console.error(`  → relay.yaml에 version: ${newVersion} 저장됨\n`)
+        }
       } else if (isTTY) {
         const { select: promptVersion } = await import('@inquirer/prompts')
         const [major, minor, patch] = config.version.split('.').map(Number)
@@ -635,24 +644,30 @@ export function registerPublish(program: Command): void {
         const { fetchMyOrgs } = await import('./orgs.js')
         const orgs = await fetchMyOrgs(token)
 
-        // --space flag (legacy alias for --org): resolve Org by slug
-        if (opts.space) {
-          const matched = orgs.find((o) => o.slug === opts.space)
+        // Determine explicit org slug: --org > --space (legacy) > relay.yaml org_slug
+        const explicitOrgSlug = opts.org ?? opts.space ?? config.org_slug
+
+        // --org / --space / relay.yaml org_slug: resolve Org by slug
+        if (explicitOrgSlug) {
+          const matched = orgs.find((o) => o.slug === explicitOrgSlug)
           if (matched) {
             selectedOrgId = matched.id
             selectedOrgSlug = matched.slug
+            if (!json && (opts.org || config.org_slug)) {
+              console.error(`\x1b[2m  Organization: ${matched.name} (${matched.slug})\x1b[0m\n`)
+            }
           } else {
             if (json) {
               console.error(JSON.stringify({
                 error: 'INVALID_ORG',
-                message: `Organization '${opts.space}'를 찾을 수 없습니다.`,
+                message: `Organization '${explicitOrgSlug}'를 찾을 수 없습니다.`,
                 fix: `사용 가능한 Org: ${orgs.map((o) => o.slug).join(', ')}`,
                 options: orgs.map((o) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
               }))
             } else {
-              console.error(`Organization '${opts.space}'를 찾을 수 없습니다.`)
+              console.error(`Organization '${explicitOrgSlug}'를 찾을 수 없습니다.`)
             }
-            reportCliError('publish', 'INVALID_ORG', `org:${opts.space}`)
+            reportCliError('publish', 'INVALID_ORG', `org:${explicitOrgSlug}`)
             process.exit(1)
           }
         } else if (isTTY) {
@@ -749,7 +764,8 @@ export function registerPublish(program: Command): void {
       }
 
       // Confirm visibility before publish (재배포 시 변경 기회 제공)
-      if (isTTY) {
+      // Skip when a bump flag is present and visibility is already set in relay.yaml
+      if (isTTY && !hasBumpFlag) {
         const { select: promptConfirmVis } = await import('@inquirer/prompts')
         const visLabelMap: Record<string, string> = {
           public: '공개',
@@ -893,25 +909,25 @@ export function registerPublish(program: Command): void {
           if (isTTY) {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
             const accessCode = (result as unknown as Record<string, unknown>).access_code as string | null
-            const guideUrl = accessCode
-              ? `https://relayax.com/api/registry/${detailSlug}/guide.md?code=${accessCode}`
-              : `https://relayax.com/api/registry/${detailSlug}/guide.md`
 
-            console.log(`\n  \x1b[90m주변인에게 공유하세요:\x1b[0m\n`)
-            console.log('```')
-            console.log(GUIDE_INSTRUCTION)
-            console.log(guideUrl)
-            console.log('```')
+            // Primary: npx 설치 명령어 한 줄
+            const visibility = config.visibility ?? 'public'
+            let installCmd: string
+            if (visibility === 'internal' && accessCode) {
+              installCmd = `npx relayax-cli install ${result.slug} --join-code ${accessCode}`
+            } else if (visibility === 'private' && accessCode) {
+              installCmd = `npx relayax-cli install ${result.slug} --code ${accessCode}`
+            } else {
+              installCmd = `npx relayax-cli install ${result.slug}`
+            }
 
-            const installCmd = accessCode
-              ? `/relay-install ${result.slug} --code ${accessCode}`
-              : `/relay-install ${result.slug}`
-            console.log(`\n  \x1b[90mrelay CLI 사용자용:\x1b[0m\n`)
-            console.log('```')
-            console.log(installCmd)
-            console.log('```')
+            console.log(`\n  \x1b[90m공유하세요:\x1b[0m`)
+            console.log(`  ┌${'─'.repeat(installCmd.length + 2)}┐`)
+            console.log(`  │ ${installCmd} │`)
+            console.log(`  └${'─'.repeat(installCmd.length + 2)}┘`)
 
-            console.log(`\n  \x1b[90m상세페이지: \x1b[36mrelayax.com/@${detailSlug}\x1b[0m`)
+            // Secondary: 에이전트 소개 페이지
+            console.log(`\n  \x1b[90m에이전트 소개: \x1b[36mhttps://relayax.com/@${detailSlug}\x1b[0m`)
           }
         }
       } catch (err) {

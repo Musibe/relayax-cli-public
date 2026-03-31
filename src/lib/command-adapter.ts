@@ -1,7 +1,7 @@
 import os from 'os'
 import path from 'path'
 import type { AITool } from './ai-tools.js'
-import { INSTALL_PROMPT, PUBLISH_PROMPT, ERROR_HANDLING_GUIDE } from '../prompts/index.js'
+import { EXPLORE_PROMPT, CREATE_PROMPT, ERROR_HANDLING_GUIDE } from '../prompts/index.js'
 
 /**
  * 환경 감지 프리앰블.
@@ -106,9 +106,9 @@ export function formatCommandFile(content: CommandContent): string {
 
 export const USER_COMMANDS: CommandContent[] = [
   {
-    id: 'relay-install',
-    description: 'relay에서 에이전트를 설치합니다',
-    body: ENV_PREAMBLE + INSTALL_PROMPT,
+    id: 'relay-explore',
+    description: 'relay 마켓플레이스를 탐색하고 프로젝트에 맞는 에이전트를 찾습니다',
+    body: EXPLORE_PROMPT,
   },
   {
     id: 'relay-status',
@@ -173,7 +173,7 @@ ${ERROR_HANDLING_GUIDE}
 - \`--org <slug>\` 인자가 있으면: \`relay list --org <org-slug> --json\`으로 해당 Organization의 에이전트 목록도 보여줍니다.
 
 ### 4. 안내
-- 설치된 에이전트가 없으면 \`/relay-install\`로 에이전트를 탐색·설치해보라고 안내합니다.
+- 설치된 에이전트가 없으면 \`/relay-explore\`로 에이전트를 탐색해보라고 안내합니다.
 - Org가 있으면 활용법을 안내합니다:
   - Org 에이전트 설치: \`relay install @<org-slug>/<agent>\`
   - Org 관리: www.relayax.com/orgs/<slug>
@@ -221,9 +221,9 @@ ${ERROR_HANDLING_GUIDE}
 → "✓ @alice/doc-writer 삭제 완료 (12개 파일 제거)"`,
   },
   {
-    id: 'relay-publish',
-    description: '현재 에이전트 패키지를 relay에 배포합니다',
-    body: ENV_PREAMBLE + PUBLISH_PROMPT,
+    id: 'relay-create',
+    description: '에이전트 패키지를 새로 만들어 relay에 배포합니다',
+    body: CREATE_PROMPT,
   },
 ]
 

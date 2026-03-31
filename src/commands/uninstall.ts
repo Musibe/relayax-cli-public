@@ -7,7 +7,7 @@ import {
   loadGlobalInstalled,
   saveGlobalInstalled,
 } from '../lib/config.js'
-import { uninstallAgent, cleanEmptyParents } from '../lib/installer.js'
+import { uninstallAgent, cleanEmptyParents, removeSymlinks } from '../lib/installer.js'
 import { isScopedSlug, parseSlug } from '../lib/slug.js'
 import { AI_TOOLS } from '../lib/ai-tools.js'
 import { resolveProjectPath } from '../lib/paths.js'
@@ -73,11 +73,20 @@ export function registerUninstall(program: Command): void {
         const removed = uninstallAgent(localEntry.files)
         totalRemoved += removed.length
 
-        // Remove deployed files
+        // Remove deployed symlinks (new)
+        if (localEntry.deployed_symlinks && localEntry.deployed_symlinks.length > 0) {
+          const symlinkRemoved = removeSymlinks(localEntry.deployed_symlinks)
+          totalRemoved += symlinkRemoved.length
+          const boundary = inferBoundary(localEntry.deployed_symlinks, resolveProjectPath(_opts.project))
+          for (const f of symlinkRemoved) {
+            cleanEmptyParents(f, boundary)
+          }
+        }
+
+        // Remove deployed files (legacy)
         if (localEntry.deployed_files && localEntry.deployed_files.length > 0) {
           const deployedRemoved = uninstallAgent(localEntry.deployed_files)
           totalRemoved += deployedRemoved.length
-          // Clean empty parent directories
           const boundary = inferBoundary(localEntry.deployed_files, resolveProjectPath(_opts.project))
           for (const f of deployedRemoved) {
             cleanEmptyParents(f, boundary)
@@ -96,11 +105,20 @@ export function registerUninstall(program: Command): void {
           totalRemoved += removed.length
         }
 
-        // Remove globally deployed files
+        // Remove deployed symlinks (new)
+        if (globalEntry.deployed_symlinks && globalEntry.deployed_symlinks.length > 0) {
+          const symlinkRemoved = removeSymlinks(globalEntry.deployed_symlinks)
+          totalRemoved += symlinkRemoved.length
+          const boundary = inferBoundary(globalEntry.deployed_symlinks, os.homedir())
+          for (const f of symlinkRemoved) {
+            cleanEmptyParents(f, boundary)
+          }
+        }
+
+        // Remove globally deployed files (legacy)
         if (globalEntry.deployed_files && globalEntry.deployed_files.length > 0) {
           const deployedRemoved = uninstallAgent(globalEntry.deployed_files)
           totalRemoved += deployedRemoved.length
-          // Clean empty parent directories
           const boundary = inferBoundary(globalEntry.deployed_files, os.homedir())
           for (const f of deployedRemoved) {
             cleanEmptyParents(f, boundary)

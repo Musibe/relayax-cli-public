@@ -1,10 +1,14 @@
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { Command } from 'commander'
 import { fetchAgentInfo, fetchAgentVersions, reportInstall } from '../lib/api.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
-import { installAgent } from '../lib/installer.js'
-import { getInstallPath, loadInstalled, saveInstalled, getValidToken } from '../lib/config.js'
-import { resolveSlug, isScopedSlug } from '../lib/slug.js'
+import { uninstallAgent, deploySymlinks, removeSymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
+import { getInstallPath, loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken } from '../lib/config.js'
+import { resolveSlug, isScopedSlug, parseSlug } from '../lib/slug.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
+import { resolveProjectPath } from '../lib/paths.js'
 
 export function registerUpdate(program: Command): void {
   program
@@ -17,9 +21,12 @@ export function registerUpdate(program: Command): void {
       const installPath = getInstallPath(opts.path)
       const tempDir = makeTempDir()
 
+      const projectPath = resolveProjectPath(opts.path)
+
       try {
-        // Resolve scoped slug (try installed.json first for offline, then server)
-        const installed = loadInstalled()
+        // Resolve scoped slug
+        const localInstalled = loadInstalled()
+        const globalInstalled = loadGlobalInstalled()
         let slug: string
 
         if (isScopedSlug(slugInput)) {
@@ -29,9 +36,11 @@ export function registerUpdate(program: Command): void {
           slug = parsed.full
         }
 
-        // Check installed.json for current version
-        const currentEntry = installed[slug]
+        // Find current entry (check both registries)
+        const currentEntry = localInstalled[slug] ?? globalInstalled[slug]
         const currentVersion = currentEntry?.version ?? null
+        const currentScope: 'global' | 'local' = globalInstalled[slug] ? 'global'
+          : currentEntry?.deploy_scope ?? 'global'
 
         // Fetch latest agent metadata
         const agent = await fetchAgentInfo(slug)
@@ -56,36 +65,59 @@ export function registerUpdate(program: Command): void {
           }
         }
 
-        // Download package
+        // Clean up old symlinks (new) and deployed_files (legacy migration)
+        if (currentEntry?.deployed_symlinks && currentEntry.deployed_symlinks.length > 0) {
+          removeSymlinks(currentEntry.deployed_symlinks)
+        }
+        if (currentEntry?.deployed_files && currentEntry.deployed_files.length > 0) {
+          uninstallAgent(currentEntry.deployed_files)
+        }
+
+        // Determine agent directory
+        const parsedSlug = parseSlug(slug)
+        const owner = parsedSlug?.owner ?? 'unknown'
+        const name = parsedSlug?.name ?? slug
+        const agentDir = currentScope === 'global'
+          ? path.join(os.homedir(), '.relay', 'agents', owner, name)
+          : path.join(projectPath, '.relay', 'agents', owner, name)
+
+        // Download & extract
         const tarPath = await downloadPackage(agent.package_url, tempDir)
+        if (fs.existsSync(agentDir)) {
+          fs.rmSync(agentDir, { recursive: true, force: true })
+        }
+        fs.mkdirSync(agentDir, { recursive: true })
+        await extractPackage(tarPath, agentDir)
 
-        // Extract
-        const extractDir = `${tempDir}/extracted`
-        await extractPackage(tarPath, extractDir)
+        // Inject preamble
+        injectPreambleToAgent(agentDir, slug)
 
-        // Inject preamble (update check) before copying
-        injectPreambleToAgent(extractDir, slug)
+        // Deploy symlinks (always — handles migration from legacy deployed_files)
+        const deploy = deploySymlinks(agentDir, slug, currentScope, projectPath)
 
-        // Copy files to install_path
-        const files = installAgent(extractDir, installPath)
-
-        // Preserve deploy info but clear deployed_files (agent needs to re-deploy)
-        const previousDeployScope = currentEntry?.deploy_scope
-        const hadDeployedFiles = (currentEntry?.deployed_files?.length ?? 0) > 0
-
-        // Update installed.json with new version
-        installed[slug] = {
+        // Update installed.json
+        const installRecord = {
           agent_id: agent.id,
           version: latestVersion,
           installed_at: new Date().toISOString(),
-          files,
-          // Keep deploy_scope so agent knows where to re-deploy
-          ...(previousDeployScope ? { deploy_scope: previousDeployScope } : {}),
-          // Clear deployed_files — agent must re-deploy and call deploy-record
+          files: [agentDir],
+          deploy_scope: currentScope,
+          deployed_symlinks: deploy.symlinks,
         }
-        saveInstalled(installed)
+        if (currentScope === 'global') {
+          globalInstalled[slug] = installRecord
+          saveGlobalInstalled(globalInstalled)
+          // Clean up local entry if migrating
+          if (localInstalled[slug]) {
+            delete localInstalled[slug]
+            saveInstalled(localInstalled)
+          }
+        } else {
+          localInstalled[slug] = installRecord
+          saveInstalled(localInstalled)
+        }
 
-        // Report install (non-blocking, agent_id 기반)
+        // Report
         await reportInstall(agent.id, slug, latestVersion)
 
         const result = {
@@ -93,9 +125,8 @@ export function registerUpdate(program: Command): void {
           slug,
           from_version: currentVersion,
           version: latestVersion,
-          files_installed: files.length,
-          install_path: installPath,
-          ...(hadDeployedFiles ? { needs_redeploy: true, previous_deploy_scope: previousDeployScope } : {}),
+          scope: currentScope,
+          symlinks: deploy.symlinks.length,
         }
 
         if (json) {
@@ -103,10 +134,10 @@ export function registerUpdate(program: Command): void {
         } else {
           const fromLabel = currentVersion ? `v${currentVersion} → ` : ''
           console.log(`\n\x1b[32m✓ ${agent.name} ${fromLabel}v${latestVersion} 업데이트 완료\x1b[0m`)
-          console.log(`  설치 위치: \x1b[36m${installPath}\x1b[0m`)
-          console.log(`  파일 수:   ${files.length}개`)
+          console.log(`  위치: \x1b[36m${agentDir}\x1b[0m`)
+          console.log(`  symlink: ${deploy.symlinks.length}개`)
 
-          // Show changelog for this version
+          // Show changelog
           try {
             const versions = await fetchAgentVersions(slug)
             const thisVersion = versions.find((v) => v.version === latestVersion)
@@ -118,9 +149,12 @@ export function registerUpdate(program: Command): void {
               console.log(`  \x1b[90m───────────────────────────────────────────\x1b[0m`)
             }
           } catch {
-            // Non-critical: skip changelog display
+            // Non-critical
           }
 
+          // Requires check
+          const requiresResults = checkRequires(agentDir)
+          printRequiresCheck(requiresResults)
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

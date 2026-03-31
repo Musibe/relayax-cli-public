@@ -15,8 +15,10 @@ export interface InstalledAgent {
   org_slug?: string;
   /** 배치 범위 — 에이전트가 relay deploy-record로 기록 */
   deploy_scope?: 'global' | 'local';
-  /** 배치된 파일 절대경로 목록 — 에이전트가 relay deploy-record로 기록 */
+  /** 배치된 파일 절대경로 목록 — 에이전트가 relay deploy-record로 기록 (legacy) */
   deployed_files?: string[];
+  /** symlink 절대경로 목록 — relay install이 직접 기록 */
+  deployed_symlinks?: string[];
 }
 
 /** 키는 scoped slug 포맷: "@owner/name" */

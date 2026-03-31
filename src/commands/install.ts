@@ -1,24 +1,29 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { Command } from 'commander'
 import { fetchAgentInfo, reportInstall, sendUsagePing } from '../lib/api.js'
 import type { AgentRegistryInfo } from '../types.js'
 import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
-import { loadInstalled, saveInstalled, getValidToken } from '../lib/config.js'
+import { loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken, API_URL } from '../lib/config.js'
 import { resolveSlug } from '../lib/slug.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
 import { hasGlobalUserCommands, installGlobalUserCommands } from './init.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
+import { deploySymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
 
 export function registerInstall(program: Command): void {
   program
     .command('install <slug>')
     .description('에이전트 패키지를 .relay/agents/에 다운로드합니다')
     .option('--join-code <code>', '초대 코드 (Organization 에이전트 설치 시 자동 가입)')
+    .option('--code <code>', '접근 코드 (private 에이전트 설치 시)')
+    .option('--global', '글로벌 설치 (홈 디렉토리)')
+    .option('--local', '로컬 설치 (프로젝트 디렉토리)')
     .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
-    .action(async (slugInput: string, _opts: { joinCode?: string; project?: string }) => {
+    .action(async (slugInput: string, _opts: { joinCode?: string; code?: string; global?: boolean; local?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = resolveProjectPath(_opts.project)
       const tempDir = makeTempDir()
@@ -48,6 +53,40 @@ export function registerInstall(program: Command): void {
         parsed = await resolveSlug(actualSlugInput)
         slug = parsed.full
 
+        // Helper: ensure a valid token exists, triggering auto-login in TTY if needed.
+        // Returns the token string or null if login failed / not available.
+        async function ensureToken(): Promise<string | null> {
+          let token = await getValidToken()
+          if (!token) {
+            const isTTY = Boolean(process.stdin.isTTY)
+            if (isTTY && !json) {
+              console.error('\x1b[33m⚙ 이 에이전트는 로그인이 필요합니다. 로그인을 시작합니다...\x1b[0m')
+              const { runLogin } = await import('./login.js')
+              await runLogin()
+              token = await getValidToken()
+            }
+          }
+          return token ?? null
+        }
+
+        // Pre-fetch auto-login: --join-code and --code always require auth.
+        if (_opts.joinCode || _opts.code) {
+          const token = await ensureToken()
+          if (!token) {
+            if (json) {
+              console.error(JSON.stringify({
+                error: 'LOGIN_REQUIRED',
+                slug,
+                message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
+                fix: 'relay login 실행 후 재시도하세요.',
+              }))
+            } else {
+              console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
+            }
+            process.exit(1)
+          }
+        }
+
         try {
           agent = await fetchAgentInfo(slug)
         } catch (fetchErr) {
@@ -66,15 +105,61 @@ export function registerInstall(program: Command): void {
               }
             } catch { /* ignore parse errors */ }
 
-            // Private agent: show purchase info + relay access hint
-            if (errorVisibility === 'private' || purchaseInfo) {
+            // Task 2.1: --join-code provided and not yet a member → join org then retry
+            if (_opts.joinCode && membershipStatus !== 'member') {
+              if (!json) {
+                console.error('\x1b[33m⚙ 초대 코드로 Organization에 가입합니다...\x1b[0m')
+              }
+              const { joinOrg } = await import('./join.js')
+              await joinOrg(parsed.owner, _opts.joinCode)
+              agent = await fetchAgentInfo(slug)
+            }
+            // Task 2.2: --code provided and agent is private → claim access then retry
+            else if (_opts.code && (errorVisibility === 'private' || purchaseInfo)) {
+              if (!json) {
+                console.error('\x1b[33m⚙ 접근 코드로 에이전트 접근 권한을 요청합니다...\x1b[0m')
+              }
+              const token = await getValidToken()
+              if (!token) {
+                if (json) {
+                  console.error(JSON.stringify({
+                    error: 'LOGIN_REQUIRED',
+                    slug,
+                    message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
+                    fix: 'relay login 실행 후 재시도하세요.',
+                  }))
+                } else {
+                  console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
+                }
+                process.exit(1)
+              }
+              const claimRes = await fetch(`${API_URL}/api/agents/${slug}/claim-access`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ code: _opts.code }),
+                signal: AbortSignal.timeout(10000),
+              })
+              if (!claimRes.ok) {
+                const claimBody = (await claimRes.json().catch(() => ({}))) as { error?: string; message?: string }
+                const claimErrCode = claimBody.error ?? String(claimRes.status)
+                if (claimErrCode === 'INVALID_LINK') throw new Error('초대 링크가 유효하지 않거나 만료되었습니다.')
+                throw new Error(claimBody.message ?? `접근 권한 요청 실패 (${claimRes.status})`)
+              }
+              agent = await fetchAgentInfo(slug)
+            }
+            // No code provided: show appropriate error messages
+            else if (errorVisibility === 'private' || purchaseInfo) {
+              // Private agent: show purchase info + relay access hint
               if (json) {
                 console.error(JSON.stringify({
                   error: 'ACCESS_REQUIRED',
                   message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
                   purchase_info: purchaseInfo ?? null,
-                  fix: '접근 링크 코드가 있으면: relay access <slug> --code <코드>',
+                  fix: '접근 링크 코드가 있으면: relay install ' + slugInput + ' --code <코드>',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
@@ -84,19 +169,17 @@ export function registerInstall(program: Command): void {
                 if (purchaseInfo?.url) {
                   console.error(`  \x1b[36m${purchaseInfo.url}\x1b[0m`)
                 }
-                console.error(`\n\x1b[33m접근 링크 코드가 있으면: relay access ${slugInput} --code <코드>\x1b[0m`)
+                console.error(`\n\x1b[33m접근 링크 코드가 있으면: relay install ${slugInput} --code <코드>\x1b[0m`)
               }
               process.exit(1)
-            }
-
-            if (membershipStatus === 'member') {
+            } else if (membershipStatus === 'member') {
               // Member but no access to this specific agent
               if (json) {
                 console.error(JSON.stringify({
                   error: 'NO_ACCESS',
                   message: '이 에이전트에 대한 접근 권한이 없습니다.',
                   slug,
-                  fix: '이 에이전트의 접근 링크 코드가 있으면 `relay access ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 에이전트 제작자에게 문의하세요.',
+                  fix: '이 에이전트의 접근 링크 코드가 있으면 `relay install ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 에이전트 제작자에게 문의하세요.',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트에 대한 접근 권한이 없습니다.\x1b[0m')
@@ -108,11 +191,11 @@ export function registerInstall(program: Command): void {
                   error: 'ACCESS_REQUIRED',
                   message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
-                  fix: '초대 코드가 있으면 `relay join <org-slug> --code <코드>`로 가입하세요.',
+                  fix: '초대 코드가 있으면 `relay install ' + slugInput + ' --join-code <코드>`로 가입하세요.',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
-                console.error('\x1b[33m초대 코드가 있으면 `relay join <org-slug> --code <코드>`로 가입하세요.\x1b[0m')
+                console.error('\x1b[33m초대 코드가 있으면 `relay install ' + slugInput + ' --join-code <코드>`로 가입하세요.\x1b[0m')
               }
               process.exit(1)
             }
@@ -126,35 +209,33 @@ export function registerInstall(program: Command): void {
         // Re-bind as non-optional so TypeScript tracks the narrowing through nested scopes
         let resolvedAgent: AgentRegistryInfo = agent
 
-        const agentDir = path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
+        // Scope 자동결정: --global/--local 플래그 > agent_type 기반
+        const scope: 'global' | 'local' = _opts.global ? 'global'
+          : _opts.local ? 'local'
+          : resolvedAgent.type === 'passive' ? 'local'
+          : 'global'
 
-        // 2. Visibility check + auto-login
+        const agentDir = scope === 'global'
+          ? path.join(os.homedir(), '.relay', 'agents', parsed.owner, parsed.name)
+          : path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
+
+        // 2. Visibility check + auto-login (internal agents always require a token)
         const visibility = resolvedAgent.visibility ?? 'public'
         if (visibility === 'internal') {
-          let token = await getValidToken()
+          const token = await ensureToken()
           if (!token) {
-            const isTTY = Boolean(process.stdin.isTTY)
-            if (isTTY && !json) {
-              // Auto-login: TTY 환경에서 자동으로 login 플로우 트리거
-              console.error('\x1b[33m⚙ 이 에이전트는 로그인이 필요합니다. 로그인을 시작합니다...\x1b[0m')
-              const { runLogin } = await import('./login.js')
-              await runLogin()
-              token = await getValidToken()
+            if (json) {
+              console.error(JSON.stringify({
+                error: 'LOGIN_REQUIRED',
+                visibility,
+                slug,
+                message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
+                fix: 'relay login 실행 후 재시도하세요.',
+              }))
+            } else {
+              console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
             }
-            if (!token) {
-              if (json) {
-                console.error(JSON.stringify({
-                  error: 'LOGIN_REQUIRED',
-                  visibility,
-                  slug,
-                  message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
-                  fix: 'relay login 실행 후 재시도하세요.',
-                }))
-              } else {
-                console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
-              }
-              process.exit(1)
-            }
+            process.exit(1)
           }
         }
 
@@ -186,7 +267,13 @@ export function registerInstall(program: Command): void {
         // 4.5. Inject preamble (update check) into SKILL.md and commands
         injectPreambleToAgent(agentDir, slug)
 
-        // 5. Count extracted files
+        // 5. Deploy symlinks to detected AI tool directories
+        const deploy = deploySymlinks(agentDir, slug, scope, projectPath)
+        for (const w of deploy.warnings) {
+          if (!json) console.error(`\x1b[33m${w}\x1b[0m`)
+        }
+
+        // 6. Count extracted files
         function countFiles(dir: string): number {
           let count = 0
           if (!fs.existsSync(dir)) return 0
@@ -201,17 +288,26 @@ export function registerInstall(program: Command): void {
         }
         const fileCount = countFiles(agentDir)
 
-        // 6. Record in installed.json
-        const installed = loadInstalled()
-        installed[slug] = {
+        // 7. Record in installed.json (scope-aware)
+        const installRecord = {
           agent_id: resolvedAgent.id,
           version: resolvedAgent.version,
           installed_at: new Date().toISOString(),
           files: [agentDir],
+          deploy_scope: scope,
+          deployed_symlinks: deploy.symlinks,
         }
-        saveInstalled(installed)
+        if (scope === 'global') {
+          const globalInstalled = loadGlobalInstalled()
+          globalInstalled[slug] = installRecord
+          saveGlobalInstalled(globalInstalled)
+        } else {
+          const installed = loadInstalled()
+          installed[slug] = installRecord
+          saveInstalled(installed)
+        }
 
-        // 7. Report install + usage ping (non-blocking, agent_id 기반)
+        // 8. Report install + usage ping (non-blocking, agent_id 기반)
         await reportInstall(resolvedAgent.id, slug, resolvedAgent.version)
         sendUsagePing(resolvedAgent.id, slug, resolvedAgent.version)
 
@@ -223,6 +319,8 @@ export function registerInstall(program: Command): void {
           commands: resolvedAgent.commands,
           files: fileCount,
           install_path: agentDir,
+          scope,
+          symlinks: deploy.symlinks,
           author: resolvedAgent.author ? {
             username: resolvedAgent.author.username,
             display_name: resolvedAgent.author.display_name ?? null,
@@ -236,17 +334,18 @@ export function registerInstall(program: Command): void {
         } else {
           const authorUsername = resolvedAgent.author?.username
           const authorSuffix = authorUsername ? `  \x1b[90mby @${authorUsername}\x1b[0m` : ''
+          const scopeLabel = scope === 'global' ? '글로벌' : '로컬'
 
-          console.log(`\n\x1b[32m✓ ${resolvedAgent.name} 다운로드 완료\x1b[0m  v${resolvedAgent.version}${authorSuffix}`)
+          console.log(`\n\x1b[32m✓ ${resolvedAgent.name} 설치 완료\x1b[0m  v${resolvedAgent.version}${authorSuffix}`)
           console.log(`  위치: \x1b[36m${agentDir}\x1b[0m`)
-          console.log(`  파일: ${fileCount}개`)
+          console.log(`  범위: ${scopeLabel}`)
+          console.log(`  파일: ${fileCount}개, symlink: ${deploy.symlinks.length}개`)
           if (resolvedAgent.commands.length > 0) {
             console.log('\n  포함된 커맨드:')
             for (const cmd of resolvedAgent.commands) {
               console.log(`    \x1b[33m/${cmd.name}\x1b[0m - ${cmd.description}`)
             }
           }
-
 
           // Usage hint (type-aware)
           const agentType = resolvedAgent.type
@@ -260,7 +359,9 @@ export function registerInstall(program: Command): void {
             console.log(`\n\x1b[33m💡 설치 완료! AI 에이전트에서 사용할 수 있습니다.\x1b[0m`)
           }
 
-          console.log('\n  \x1b[90m에이전트가 /relay-install로 환경을 구성합니다.\x1b[0m')
+          // Requires check
+          const requiresResults = checkRequires(agentDir)
+          printRequiresCheck(requiresResults)
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
