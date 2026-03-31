@@ -47,9 +47,14 @@ function showWelcome(): void {
     '  에이전트 CLI에 relay 커맨드를 연결합니다.',
     '',
     '  \x1b[2mUser 커맨드 (글로벌)\x1b[0m',
-    '  /relay-install     에이전트 탐색 & 설치',
-    '  /relay-status      설치 현황 & Space',
+    '  /relay-explore     에이전트 탐색 & 추천',
+    '  /relay-create      에이전트 생성 & 배포',
+    '  /relay-status      설치 현황 & Organization',
     '  /relay-uninstall   에이전트 삭제',
+    '',
+    '  \x1b[2mCLI 명령어\x1b[0m',
+    '  relay install      에이전트 설치 (CLI 한 줄 완결)',
+    '  relay publish      재배포 (--patch/--minor/--major)',
     '',
   ]
   console.log(lines.join('\n'))
@@ -81,23 +86,32 @@ async function selectToolsInteractively(detectedIds: Set<string>): Promise<strin
  * ~/{skillsDir}/commands/relay/ 에 설치.
  * 기존 파일 중 현재 커맨드 목록에 없는 것은 제거한다.
  */
-export function installGlobalUserCommands(): { installed: boolean; commands: string[]; tools: string[] } {
+/** 제거된 레거시 커맨드 → 대체 안내 매핑 */
+const LEGACY_COMMANDS: Record<string, string> = {
+  'relay-install': 'relay install (CLI) 또는 /relay-explore',
+  'relay-publish': 'relay publish --patch (CLI) 또는 /relay-create',
+}
+
+export function installGlobalUserCommands(): { installed: boolean; commands: string[]; tools: string[]; removed: string[] } {
   const globalCLIs = detectGlobalCLIs()
   const currentIds = new Set(USER_COMMANDS.map((c) => c.id))
   const commands: string[] = []
   const tools: string[] = []
+  const removed: string[] = []
 
-  // 감지된 CLI가 없으면 설치하지 않음 (사용자가 --tools로 지정하거나 CLI를 먼저 설치해야 함)
   const targetDirs = globalCLIs.map((t) => ({ name: t.name, dir: getGlobalCommandDirForTool(t.skillsDir), getPath: (id: string) => getGlobalCommandPathForTool(t.skillsDir, id) }))
 
   for (const target of targetDirs) {
     fs.mkdirSync(target.dir, { recursive: true })
 
-    // 기존 파일 중 현재 목록에 없는 것 제거
+    // 기존 파일 중 현재 목록에 없는 것 제거 + 레거시 안내
     for (const file of fs.readdirSync(target.dir)) {
       const id = file.replace(/\.md$/, '')
       if (!currentIds.has(id)) {
         fs.unlinkSync(path.join(target.dir, file))
+        if (LEGACY_COMMANDS[id] && !removed.includes(id)) {
+          removed.push(id)
+        }
       }
     }
 
@@ -109,12 +123,11 @@ export function installGlobalUserCommands(): { installed: boolean; commands: str
     tools.push(target.name)
   }
 
-  // commands 목록은 한 번만
   for (const cmd of USER_COMMANDS) {
     commands.push(cmd.id)
   }
 
-  return { installed: true, commands, tools }
+  return { installed: true, commands, tools, removed }
 }
 
 /**
@@ -184,10 +197,12 @@ export function registerInit(program: Command): void {
 
       let globalTools: string[] = []
 
+      let removedCommands: string[] = []
       {
         const result = installGlobalUserCommands()
         globalStatus = hasGlobalUserCommands() ? 'updated' : 'installed'
         globalTools = result.tools
+        removedCommands = result.removed
 
         // Register relay-core in installed.json
         const installed = loadInstalled()
@@ -291,6 +306,15 @@ export function registerInit(program: Command): void {
         }))
       } else {
         console.log(`\n\x1b[32m✓ relay 초기화 완료\x1b[0m\n`)
+
+        // 레거시 커맨드 마이그레이션 안내
+        if (removedCommands.length > 0) {
+          console.log(`  \x1b[33m⚠ 변경된 커맨드:\x1b[0m`)
+          for (const id of removedCommands) {
+            console.log(`    \x1b[31m✗ /${id}\x1b[0m → ${LEGACY_COMMANDS[id]}`)
+          }
+          console.log()
+        }
 
         // 글로벌
         {

@@ -183,7 +183,8 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
   // cli
   if (requires.cli) {
     for (const cli of requires.cli) {
-      const found = getCommandOutput(`which ${cli.name}`)
+      if (!isSafeName(cli.name)) continue
+      const found = getCommandOutput('which', [cli.name])
       if (found) {
         results.push({ label: 'cli', status: 'ok', message: `${cli.name} — 설치됨` })
       } else {
@@ -219,7 +220,8 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
     for (const pkg of requires.npm) {
       const name = typeof pkg === 'string' ? pkg : pkg.name
       const isRequired = typeof pkg === 'string' ? true : pkg.required !== false
-      const found = getCommandOutput(`npm list ${name} 2>/dev/null`)
+      if (!isSafeName(name)) continue
+      const found = getCommandOutput('npm', ['list', name])
       const installed = found ? !found.includes('(empty)') && !found.includes('ERR') : false
       if (installed) {
         results.push({ label: 'npm', status: 'ok', message: `${name} — 설치됨` })
@@ -268,12 +270,18 @@ export function printRequiresCheck(results: RequiresCheckResult[]): void {
   }
 }
 
-function getCommandOutput(cmd: string): string | null {
+function getCommandOutput(cmd: string, args: string[] = []): string | null {
   try {
-    return execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim()
+    const full = args.length > 0 ? `${cmd} ${args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}` : cmd
+    return execSync(full, { encoding: 'utf-8', timeout: 5000 }).trim()
   } catch {
     return null
   }
+}
+
+/** relay.yaml에서 온 이름이 안전한 식별자인지 확인 */
+function isSafeName(name: string): boolean {
+  return /^[a-zA-Z0-9._@/-]+$/.test(name)
 }
 
 function compareVersions(a: string, b: string): number {

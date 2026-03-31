@@ -99,8 +99,7 @@ export function formatCommandFile(content: CommandContent): string {
   return `---\ndescription: ${content.description}\n---\n\n${content.body}\n`
 }
 
-// ─── 프롬프트 조각은 cli/src/prompts/*.md에서 관리 (SSOT) ───
-// REQUIREMENTS_CHECK, ERROR_HANDLING_GUIDE → import from '../prompts/index.js'
+// ─── 프롬프트는 cli/src/prompts/*.md에서 관리 (SSOT) ───
 
 // ─── User Commands (글로벌 설치) ───
 
@@ -222,7 +221,7 @@ ${ERROR_HANDLING_GUIDE}
   },
   {
     id: 'relay-create',
-    description: '에이전트 패키지를 새로 만들어 relay에 배포합니다',
+    description: '에이전트를 만들거나 업데이트하여 relay에 배포합니다',
     body: CREATE_PROMPT,
   },
 ]

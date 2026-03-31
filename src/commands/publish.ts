@@ -719,27 +719,33 @@ export function registerPublish(program: Command): void {
       const defaultVisibility: 'public' | 'private' = 'public'
 
       // Visibility validation: must be explicitly set
+      // internal은 org가 선택된 경우에만 옵션으로 표시
+      const hasOrg = !!selectedOrgId
       if (!config.visibility) {
         if (isTTY) {
           const { select: promptSelect } = await import('@inquirer/prompts')
           console.error(`\n\x1b[33m⚠ relay.yaml에 visibility가 설정되지 않았습니다.\x1b[0m  (기본값: ${defaultVisibility === 'public' ? '공개' : '비공개'})`)
 
+          const visChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = [
+            {
+              name: `공개 — 누구나 설치${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+              value: 'public',
+            },
+            {
+              name: '링크 공유 — 접근 링크가 있는 사람만 설치',
+              value: 'private',
+            },
+          ]
+          if (hasOrg) {
+            visChoices.push({
+              name: '비공개 — Org 멤버만 접근',
+              value: 'internal',
+            })
+          }
+
           config.visibility = await promptSelect<'public' | 'private' | 'internal'>({
             message: '공개 범위를 선택하세요:',
-            choices: [
-              {
-                name: `공개 — 누구나 설치${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
-                value: 'public',
-              },
-              {
-                name: '링크 공유 — 접근 링크가 있는 사람만 설치',
-                value: 'private',
-              },
-              {
-                name: `비공개 — Org 멤버만 접근`,
-                value: 'internal',
-              },
-            ],
+            choices: visChoices,
             default: defaultVisibility,
           })
           // Save back to relay.yaml
@@ -749,14 +755,17 @@ export function registerPublish(program: Command): void {
           console.error(`  → relay.yaml에 visibility: ${config.visibility} 저장됨\n`)
         } else {
           reportCliError('publish', 'MISSING_VISIBILITY', 'visibility not set in relay.yaml')
+          const visOptions: { value: string; label: string }[] = [
+            { value: 'public', label: '공개 — 누구나 설치' },
+            { value: 'private', label: '링크 공유 — 접근 링크가 있는 사람만 설치' },
+          ]
+          if (hasOrg) {
+            visOptions.push({ value: 'internal', label: '비공개 — Org 멤버만 접근' })
+          }
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
             message: 'relay.yaml에 visibility를 설정해주세요.',
-            options: [
-              { value: 'public', label: '공개 — 누구나 설치' },
-              { value: 'private', label: '링크 공유 — 접근 링크가 있는 사람만 설치' },
-              { value: 'internal', label: '비공개 — Org 멤버만 접근' },
-            ],
+            options: visOptions,
             fix: 'relay.yaml의 visibility 필드를 위 옵션 중 하나로 설정하세요.',
           }))
           process.exit(1)
@@ -774,9 +783,7 @@ export function registerPublish(program: Command): void {
         }
         const currentVisLabel = visLabelMap[config.visibility ?? 'public'] ?? config.visibility
 
-        const newVisibility = await promptConfirmVis<'public' | 'private' | 'internal'>({
-          message: `공개 범위: ${currentVisLabel} — 유지하거나 변경하세요`,
-          choices: [
+        const confirmVisChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = [
             {
               name: `공개 — 누구나 설치${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
               value: 'public',
@@ -785,11 +792,17 @@ export function registerPublish(program: Command): void {
               name: '링크공유 — 접근 링크가 있는 사람만 설치',
               value: 'private',
             },
-            {
-              name: `비공개 — Org 멤버만 접근`,
-              value: 'internal',
-            },
-          ],
+          ]
+        if (hasOrg) {
+          confirmVisChoices.push({
+            name: '비공개 — Org 멤버만 접근',
+            value: 'internal',
+          })
+        }
+
+        const newVisibility = await promptConfirmVis<'public' | 'private' | 'internal'>({
+          message: `공개 범위: ${currentVisLabel} — 유지하거나 변경하세요`,
+          choices: confirmVisChoices,
           default: config.visibility ?? defaultVisibility,
         })
 
