@@ -39,7 +39,17 @@ import type { ContentType } from '../lib/ai-tools.js'
 export interface ContentEntry {
   name: string
   type: ContentType
-  from: string // 상대 경로(.claude/skills/x) 또는 글로벌(~/.claude/skills/x)
+  from?: string // 상대 경로(.claude/skills/x) 또는 글로벌(~/.claude/skills/x)
+  path?: string // from의 별칭 (relay.yaml에서 path로 작성해도 동작)
+}
+
+/** from 또는 path 중 존재하는 값을 반환 */
+function getFromPath(entry: ContentEntry): string {
+  const val = entry.from ?? entry.path
+  if (!val) {
+    throw new Error(`contents 항목 "${entry.name}"에 from 또는 path가 필요합니다.`)
+  }
+  return val
 }
 
 type ContentDiffStatus = 'modified' | 'unchanged' | 'source_missing'
@@ -185,7 +195,7 @@ export function computeContentsDiff(
   const diff: ContentDiffEntry[] = []
 
   for (const entry of contents) {
-    const absFrom = resolveFromPath(entry.from, projectPath)
+    const absFrom = resolveFromPath(getFromPath(entry), projectPath)
 
     if (!fs.existsSync(absFrom)) {
       diff.push({ name: entry.name, type: entry.type, status: 'source_missing' })
@@ -224,7 +234,8 @@ export function computeContentsDiff(
  *     ~/.claude/agents/dev-lead.md → agents/dev-lead.md
  */
 function deriveRelaySubPath(entry: ContentEntry): string {
-  const from = entry.from.startsWith('~/') ? entry.from.slice(2) : entry.from
+  const fromPath = getFromPath(entry)
+  const from = fromPath.startsWith('~/') ? fromPath.slice(2) : fromPath
   // skills/xxx, agents/xxx 등의 패턴을 추출
   for (const dir of SYNC_DIRS) {
     const idx = from.indexOf(`/${dir}/`)
@@ -293,7 +304,7 @@ export function syncContentsToRelay(
     const content = contents.find((c) => c.name === diffEntry.name && c.type === diffEntry.type)
     if (!content) continue
 
-    const absFrom = resolveFromPath(content.from, projectPath)
+    const absFrom = resolveFromPath(getFromPath(content), projectPath)
     const relaySubPath = deriveRelaySubPath(content)
     const relayTarget = path.join(relayDir, relaySubPath)
 

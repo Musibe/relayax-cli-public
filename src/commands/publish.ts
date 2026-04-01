@@ -983,7 +983,7 @@ export function registerPublish(program: Command): void {
           if (resultGitUrl) {
             const pSlug = (jsonResult.slug as string).startsWith('@') ? (jsonResult.slug as string).slice(1) : jsonResult.slug as string
             const pName = pSlug.includes('/') ? pSlug.split('/')[1] : pSlug
-            jsonResult.plugin_url = `${API_URL}/api/registry/@${pSlug}/plugin`
+            jsonResult.plugin_url = `${API_URL}/api/registry/${pSlug}/plugin`
             jsonResult.plugin_install_cmd = `/plugin install ${pName}`
           }
           jsonResult.platforms = generatedPlatforms
@@ -1012,7 +1012,7 @@ export function registerPublish(program: Command): void {
 
             // Plugin install commands (marketplace add + plugin install)
             const pluginSlug = detailSlug.includes('/') ? detailSlug.split('/')[1] : detailSlug
-            const pluginUrl = gitUrl ? `${API_URL}/api/registry/@${detailSlug}/plugin` : null
+            const pluginUrl = gitUrl ? `${API_URL}/api/registry/${detailSlug}/plugin` : null
 
             // ── CLI 설치 (복사용) ──
             console.log(`\n  \x1b[1m▸ CLI 설치\x1b[0m`)
