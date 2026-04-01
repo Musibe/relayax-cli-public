@@ -977,31 +977,29 @@ export function registerPublish(program: Command): void {
         }
 
         if (json) {
-          console.log(JSON.stringify(result))
+          // Enrich JSON output with plugin_url if git_url available
+          const jsonResult = { ...(result as unknown as Record<string, unknown>) }
+          const resultGitUrl = jsonResult.git_url as string | undefined
+          if (resultGitUrl) {
+            const pSlug = (jsonResult.slug as string).startsWith('@') ? (jsonResult.slug as string).slice(1) : jsonResult.slug as string
+            const pName = pSlug.includes('/') ? pSlug.split('/')[1] : pSlug
+            jsonResult.plugin_url = `${API_URL}/api/registry/@${pSlug}/plugin`
+            jsonResult.plugin_install_cmd = `/plugin install ${pName}`
+          }
+          jsonResult.platforms = generatedPlatforms
+          console.log(JSON.stringify(jsonResult))
         } else {
           console.log(`\n\x1b[32m✓ ${config.name} 배포 완료\x1b[0m  v${result.version}`)
           console.log(`  슬러그: \x1b[36m${result.slug}\x1b[0m`)
           console.log(`  URL:    \x1b[36m${result.url}\x1b[0m`)
 
-          // Show generated platform manifests
-          if (generatedPlatforms.length > 0) {
-            console.log(`\n  \x1b[90m플랫폼 매니페스트:\x1b[0m ${generatedPlatforms.join(', ')}`)
-          }
-
-          // Show Claude Code plugin install command if claude-code manifest was generated
-          if (generatedPlatforms.includes('claude-code')) {
-            const pluginSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
-            const pluginUrl = `${API_URL}/api/registry/@${pluginSlug}/plugin`
-            console.log(`\n  \x1b[90mClaude Code 플러그인:\x1b[0m`)
-            console.log(`  \x1b[36m/plugin marketplace add ${pluginUrl}\x1b[0m`)
-          }
-
-          // Show shareable onboarding guide as a plain copyable block
-          if (isTTY) {
+          // Build share block
+          {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
             const accessCode = (result as unknown as Record<string, unknown>).access_code as string | null
+            const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
 
-            // Primary: npx 설치 명령어 한 줄
+            // CLI install command
             const visibility = config.visibility ?? 'public'
             let installCmd: string
             if (visibility === 'internal' && accessCode) {
@@ -1012,13 +1010,59 @@ export function registerPublish(program: Command): void {
               installCmd = `npx relayax-cli install ${result.slug}`
             }
 
-            console.log(`\n  \x1b[90m공유하세요:\x1b[0m`)
-            console.log(`  ┌${'─'.repeat(installCmd.length + 2)}┐`)
-            console.log(`  │ ${installCmd} │`)
-            console.log(`  └${'─'.repeat(installCmd.length + 2)}┘`)
+            // Plugin install commands (marketplace add + plugin install)
+            const pluginSlug = detailSlug.includes('/') ? detailSlug.split('/')[1] : detailSlug
+            const pluginUrl = gitUrl ? `${API_URL}/api/registry/@${detailSlug}/plugin` : null
 
-            // Secondary: 에이전트 소개 페이지
-            console.log(`\n  \x1b[90m에이전트 소개: \x1b[36mhttps://relayax.com/@${detailSlug}\x1b[0m`)
+            // ── CLI 설치 (복사용) ──
+            console.log(`\n  \x1b[1m▸ CLI 설치\x1b[0m`)
+            console.log(`  ┌─`)
+            console.log(`  │ ${installCmd}`)
+            console.log(`  └─`)
+
+            // ── Claude Code Plugin 설치 (복사용) ──
+            if (pluginUrl) {
+              console.log(`\n  \x1b[1m▸ Claude Code Plugin 설치\x1b[0m`)
+              console.log(`  ┌─`)
+              console.log(`  │ /plugin marketplace add ${pluginUrl}`)
+              console.log(`  │ /plugin install ${pluginSlug}`)
+              console.log(`  └─`)
+            }
+
+            // ── 소개 페이지 ──
+            console.log(`\n  \x1b[90m소개 페이지:\x1b[0m https://relayax.com/@${detailSlug}`)
+
+            // ── 공유 텍스트 (코드블록, 그대로 복붙) ──
+            if (isTTY) {
+              const shareBlock = [
+                `[${config.name}] 설치하기`,
+                ``,
+                `# CLI`,
+                installCmd,
+              ]
+              if (pluginUrl) {
+                shareBlock.push(
+                  ``,
+                  `# Claude Code Plugin`,
+                  `/plugin marketplace add ${pluginUrl}`,
+                  `/plugin install ${pluginSlug}`,
+                )
+              }
+              shareBlock.push(
+                ``,
+                `소개: https://relayax.com/@${detailSlug}`,
+              )
+
+              const maxLen = Math.max(...shareBlock.map((l) => l.length))
+              const border = '─'.repeat(maxLen + 2)
+              console.log(`\n  \x1b[90m┌${border}┐\x1b[0m`)
+              for (const line of shareBlock) {
+                const pad = ' '.repeat(maxLen - line.length)
+                console.log(`  \x1b[90m│\x1b[0m ${line}${pad} \x1b[90m│\x1b[0m`)
+              }
+              console.log(`  \x1b[90m└${border}┘\x1b[0m`)
+              console.log(`  \x1b[90m↑ 팀에 공유하세요\x1b[0m`)
+            }
           }
         }
       } catch (err) {
