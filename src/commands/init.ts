@@ -5,9 +5,7 @@ import { Command } from 'commander'
 import { detectAgentCLIs, detectGlobalCLIs, AI_TOOLS } from '../lib/ai-tools.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import {
-  createAdapter,
   USER_COMMANDS,
-  BUILDER_COMMANDS,
   formatCommandFile,
   getGlobalCommandDir,
   getGlobalCommandPath,
@@ -18,26 +16,6 @@ import { loadInstalled, saveInstalled } from '../lib/config.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json') as { version: string }
-
-const VALID_AGENT_DIRS = ['skills', 'agents', 'rules', 'commands'] as const
-
-function resolveTools(toolsArg: string): string[] {
-  const raw = toolsArg.trim().toLowerCase()
-
-  if (raw === 'all') {
-    return AI_TOOLS.map((t) => t.value)
-  }
-
-  const tokens = raw.split(',').map((t) => t.trim()).filter(Boolean)
-  const valid = new Set(AI_TOOLS.map((t) => t.value))
-  const invalid = tokens.filter((t) => !valid.has(t))
-
-  if (invalid.length > 0) {
-    throw new Error(`알 수 없는 도구: ${invalid.join(', ')}\n사용 가능: ${[...valid].join(', ')}`)
-  }
-
-  return tokens
-}
 
 function showWelcome(): void {
   const lines = [
@@ -58,27 +36,6 @@ function showWelcome(): void {
     '',
   ]
   console.log(lines.join('\n'))
-}
-
-async function selectToolsInteractively(detectedIds: Set<string>): Promise<string[]> {
-  const { checkbox } = await import('@inquirer/prompts')
-
-  const choices = AI_TOOLS.map((tool) => {
-    const detected = detectedIds.has(tool.value)
-    return {
-      name: detected ? `${tool.name} \x1b[32m(detected)\x1b[0m` : tool.name,
-      value: tool.value,
-      checked: detected,
-    }
-  })
-
-  const selected = await checkbox({
-    message: `연결할 에이전트 CLI를 선택하세요`,
-    choices,
-    pageSize: 8,
-  })
-
-  return selected
 }
 
 /**
@@ -139,24 +96,6 @@ export function hasGlobalUserCommands(): boolean {
   )
 }
 
-/**
- * 에이전트 프로젝트인지 감지한다 (.relay/ 디렉토리 내 relay.yaml 또는 에이전트 디렉토리 구조).
- */
-function isAgentProject(projectPath: string): boolean {
-  const relayDir = path.join(projectPath, '.relay')
-  if (!fs.existsSync(relayDir)) return false
-
-  if (fs.existsSync(path.join(relayDir, 'relay.yaml'))) {
-    return true
-  }
-
-  return VALID_AGENT_DIRS.some((d) => {
-    const dirPath = path.join(relayDir, d)
-    if (!fs.existsSync(dirPath)) return false
-    return fs.readdirSync(dirPath).filter((f: string) => !f.startsWith('.')).length > 0
-  })
-}
-
 
 export function registerInit(program: Command): void {
   program
@@ -174,8 +113,6 @@ export function registerInit(program: Command): void {
 
       const projectPath = resolveProjectPath(opts.project)
       const detected = detectAgentCLIs(projectPath)
-      const detectedIds = new Set(detected.map((t) => t.value))
-      const isBuilder = isAgentProject(projectPath)
 
       // ── 0. --json 모드에서 --tools/--all 없으면 MISSING_TOOLS 에러 ──
       if (json && !opts.tools && !opts.all && !opts.auto) {
@@ -215,94 +152,19 @@ export function registerInit(program: Command): void {
         saveInstalled(installed)
       }
 
-      // ── 2. 로컬 Builder 커맨드 (에이전트 프로젝트인 경우) ──
-      // relay-publish가 글로벌로 승격되어 BUILDER_COMMANDS가 비어있으면 스킵
-      const localResults: { tool: string; commands: string[] }[] = []
-
-      if (isBuilder && BUILDER_COMMANDS.length > 0) {
-        // 도구 선택
-        let targetToolIds: string[]
-
-        if (opts.tools) {
-          targetToolIds = resolveTools(opts.tools)
-        } else if (!autoMode) {
-          // interactive mode: only when stdin is a TTY and not --auto/--json
-          showWelcome()
-
-          if (detected.length > 0) {
-            console.log(`  감지된 에이전트 CLI: \x1b[36m${detected.map((t) => t.name).join(', ')}\x1b[0m\n`)
-          }
-
-          console.log('  \x1b[2mBuilder 프로젝트 감지 → 로컬 Builder 커맨드도 설치합니다.\x1b[0m\n')
-
-          targetToolIds = await selectToolsInteractively(detectedIds)
-
-          if (targetToolIds.length === 0) {
-            console.log('\n  선택된 도구가 없습니다.')
-            // 글로벌은 이미 설치됨
-            if (globalStatus === 'installed') {
-              console.log('  글로벌 User 커맨드는 설치되었습니다.\n')
-            }
-            return
-          }
-        } else {
-          // auto mode: use detected CLIs, or all available tools if none detected
-          if (detected.length > 0) {
-            targetToolIds = detected.map((t) => t.value)
-          } else {
-            targetToolIds = AI_TOOLS.map((t) => t.value)
-          }
-        }
-
-        // Builder 커맨드 설치 (기존 파일 중 현재 목록에 없는 것 제거)
-        const builderIds = new Set(BUILDER_COMMANDS.map((c) => c.id))
-
-        for (const toolId of targetToolIds) {
-          const tool = AI_TOOLS.find((t) => t.value === toolId)
-          if (!tool) continue
-
-          const adapter = createAdapter(tool)
-          const localDir = path.join(projectPath, tool.skillsDir, 'commands', 'relay')
-
-          // 기존 로컬 커맨드 중 Builder 목록에 없는 것 제거
-          if (fs.existsSync(localDir)) {
-            for (const file of fs.readdirSync(localDir)) {
-              const id = file.replace(/\.md$/, '')
-              if (!builderIds.has(id)) {
-                fs.unlinkSync(path.join(localDir, file))
-              }
-            }
-          }
-
-          const installedCommands: string[] = []
-
-          for (const cmd of BUILDER_COMMANDS) {
-            const filePath = path.join(projectPath, adapter.getFilePath(cmd.id))
-            const fileContent = adapter.formatFile(cmd)
-
-            fs.mkdirSync(path.dirname(filePath), { recursive: true })
-            fs.writeFileSync(filePath, fileContent)
-            installedCommands.push(cmd.id)
-          }
-
-          localResults.push({ tool: tool.name, commands: installedCommands })
-        }
-      } else if (!autoMode) {
-        // User 모드: 글로벌만 설치, 안내 표시
+      if (!autoMode) {
         showWelcome()
       }
 
-      // ── 3. 출력 ──
+      // ── 2. 출력 ──
       if (json) {
         console.log(JSON.stringify({
           status: 'ok',
-          mode: isBuilder ? 'builder' : 'user',
           global: {
             status: globalStatus,
             path: getGlobalCommandDir(),
             commands: USER_COMMANDS.map((c) => c.id),
           },
-          local: isBuilder ? localResults : undefined,
         }))
       } else {
         console.log(`\n\x1b[32m✓ relay 초기화 완료\x1b[0m\n`)
@@ -319,7 +181,7 @@ export function registerInit(program: Command): void {
         // 글로벌
         {
           const toolNames = globalTools.length > 0 ? globalTools.join(', ') : '(감지된 CLI 없음)'
-          console.log(`  \x1b[36mUser 커맨드 (글로벌)\x1b[0m — ${globalStatus === 'updated' ? '업데이트됨' : '설치됨'}`)
+          console.log(`  \x1b[36m커맨드 (글로벌)\x1b[0m — ${globalStatus === 'updated' ? '업데이트됨' : '설치됨'}`)
           console.log(`  감지된 CLI: \x1b[36m${toolNames}\x1b[0m`)
           for (const cmd of USER_COMMANDS) {
             console.log(`    /${cmd.id}`)
@@ -327,23 +189,8 @@ export function registerInit(program: Command): void {
           console.log()
         }
 
-        // 로컬 Builder
-        if (localResults.length > 0) {
-          console.log(`  \x1b[36mBuilder 커맨드 (로컬)\x1b[0m`)
-          for (const r of localResults) {
-            console.log(`    ${r.tool}`)
-            for (const cmd of r.commands) {
-              console.log(`      /${cmd}`)
-            }
-          }
-          console.log()
-        }
-
-        if (!isBuilder) {
-          console.log('  에이전트를 만들려면 \x1b[33mrelay create <name>\x1b[0m을 사용하세요.')
-          console.log()
-        }
-
+        console.log('  에이전트를 만들려면 \x1b[33mrelay create <name>\x1b[0m을 사용하세요.')
+        console.log()
         console.log('  IDE를 재시작하면 슬래시 커맨드가 활성화됩니다.')
       }
     })

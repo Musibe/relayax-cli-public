@@ -1,6 +1,6 @@
 {
   "name": "relayax-cli",
-  "version": "0.3.68",
+  "version": "0.4.14",
   "description": "RelayAX Agent Team Marketplace CLI - Install and manage agent teams",
   "main": "dist/index.js",
   "bin": {
@@ -14,6 +14,7 @@
     "build": "tsc && cp src/prompts/*.md dist/prompts/",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
+    "postinstall": "node dist/postinstall.js || true",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
