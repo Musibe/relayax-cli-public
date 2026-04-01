@@ -983,7 +983,9 @@ export function registerPublish(program: Command): void {
           if (resultGitUrl) {
             const pSlug = (jsonResult.slug as string).startsWith('@') ? (jsonResult.slug as string).slice(1) : jsonResult.slug as string
             const pName = pSlug.includes('/') ? pSlug.split('/')[1] : pSlug
-            jsonResult.plugin_url = `${API_URL}/api/registry/${pSlug}/plugin`
+            const pAccessCode = jsonResult.access_code as string | null
+            const pBaseUrl = `${API_URL}/api/registry/${pSlug}/plugin`
+            jsonResult.plugin_url = pAccessCode ? `${pBaseUrl}?code=${pAccessCode}` : pBaseUrl
             jsonResult.plugin_install_cmd = `/plugin install ${pName}`
           }
           jsonResult.platforms = generatedPlatforms
@@ -999,59 +1001,56 @@ export function registerPublish(program: Command): void {
             const accessCode = (result as unknown as Record<string, unknown>).access_code as string | null
             const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
 
-            // CLI install command
+            // npx turnkey install command (works everywhere, no pre-install needed)
             const visibility = config.visibility ?? 'public'
-            let installCmd: string
+            let npxInstallCmd: string
             if (visibility === 'internal' && accessCode) {
-              installCmd = `npx relayax-cli install ${result.slug} --join-code ${accessCode}`
+              npxInstallCmd = `npx relayax-cli install ${result.slug} --join-code ${accessCode}`
             } else if (visibility === 'private' && accessCode) {
-              installCmd = `npx relayax-cli install ${result.slug} --code ${accessCode}`
+              npxInstallCmd = `npx relayax-cli install ${result.slug} --code ${accessCode}`
             } else {
-              installCmd = `npx relayax-cli install ${result.slug}`
+              npxInstallCmd = `npx relayax-cli install ${result.slug}`
             }
 
-            // Plugin install commands (marketplace add + plugin install)
+            // Plugin URLs
             const pluginSlug = detailSlug.includes('/') ? detailSlug.split('/')[1] : detailSlug
-            const pluginUrl = gitUrl ? `${API_URL}/api/registry/${detailSlug}/plugin` : null
+            const pluginBaseUrl = gitUrl ? `${API_URL}/api/registry/${detailSlug}/plugin` : null
+            const pluginUrl = pluginBaseUrl
+              ? (accessCode ? `${pluginBaseUrl}?code=${accessCode}` : pluginBaseUrl)
+              : null
 
-            // ── CLI 설치 (복사용) ──
-            console.log(`\n  \x1b[1m▸ CLI 설치\x1b[0m`)
+            // ── 설치 방법 (터미널 출력) ──
+            console.log(`\n  \x1b[1m설치 방법\x1b[0m`)
+
+            // 1. 턴키 (npx — 어디서든 한 줄)
+            console.log(`\n  \x1b[90m▸ 터미널 한 줄 (Claude Code, Cursor, Codex 등 모든 에이전트)\x1b[0m`)
             console.log(`  ┌─`)
-            console.log(`  │ ${installCmd}`)
+            console.log(`  │ ${npxInstallCmd}`)
             console.log(`  └─`)
 
-            // ── Claude Code Plugin 설치 (복사용) ──
+            // 2. Claude Code Plugin (있으면)
             if (pluginUrl) {
-              console.log(`\n  \x1b[1m▸ Claude Code Plugin 설치\x1b[0m`)
+              console.log(`\n  \x1b[90m▸ Claude Code Plugin (순서대로 각각 실행)\x1b[0m`)
               console.log(`  ┌─`)
               console.log(`  │ /plugin marketplace add ${pluginUrl}`)
+              console.log(`  └─`)
+              console.log(`  ┌─`)
               console.log(`  │ /plugin install ${pluginSlug}`)
               console.log(`  └─`)
             }
 
-            // ── 소개 페이지 ──
-            console.log(`\n  \x1b[90m소개 페이지:\x1b[0m https://relayax.com/@${detailSlug}`)
+            // 3. 소개 페이지
+            console.log(`\n  \x1b[90m소개:\x1b[0m https://relayax.com/@${detailSlug}`)
 
             // ── 공유 텍스트 (코드블록, 그대로 복붙) ──
             if (isTTY) {
               const shareBlock = [
                 `[${config.name}] 설치하기`,
                 ``,
-                `# CLI`,
-                installCmd,
-              ]
-              if (pluginUrl) {
-                shareBlock.push(
-                  ``,
-                  `# Claude Code Plugin`,
-                  `/plugin marketplace add ${pluginUrl}`,
-                  `/plugin install ${pluginSlug}`,
-                )
-              }
-              shareBlock.push(
+                npxInstallCmd,
                 ``,
                 `소개: https://relayax.com/@${detailSlug}`,
-              )
+              ]
 
               const maxLen = Math.max(...shareBlock.map((l) => l.length))
               const border = '─'.repeat(maxLen + 2)
