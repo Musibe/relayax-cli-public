@@ -977,17 +977,7 @@ export function registerPublish(program: Command): void {
         }
 
         if (json) {
-          // Enrich JSON output with plugin_url if git_url available
           const jsonResult = { ...(result as unknown as Record<string, unknown>) }
-          const resultGitUrl = jsonResult.git_url as string | undefined
-          if (resultGitUrl) {
-            const pSlug = (jsonResult.slug as string).startsWith('@') ? (jsonResult.slug as string).slice(1) : jsonResult.slug as string
-            const pName = pSlug.includes('/') ? pSlug.split('/')[1] : pSlug
-            const pAccessCode = jsonResult.access_code as string | null
-            const pBaseUrl = `${API_URL}/api/registry/${pSlug}/plugin`
-            jsonResult.plugin_url = pAccessCode ? `${pBaseUrl}?code=${pAccessCode}` : pBaseUrl
-            jsonResult.plugin_install_cmd = `/plugin install ${pName}`
-          }
           jsonResult.platforms = generatedPlatforms
           console.log(JSON.stringify(jsonResult))
         } else {
@@ -999,7 +989,7 @@ export function registerPublish(program: Command): void {
           {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
             const accessCode = (result as unknown as Record<string, unknown>).access_code as string | null
-            const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
+            // const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined // plugin disabled
 
             // npx turnkey install command (works everywhere, no pre-install needed)
             const visibility = config.visibility ?? 'public'
@@ -1012,34 +1002,11 @@ export function registerPublish(program: Command): void {
               npxInstallCmd = `npx relayax-cli install ${result.slug}`
             }
 
-            // Plugin URLs
-            const pluginSlug = detailSlug.includes('/') ? detailSlug.split('/')[1] : detailSlug
-            const pluginBaseUrl = gitUrl ? `${API_URL}/api/registry/${detailSlug}/plugin` : null
-            const pluginUrl = pluginBaseUrl
-              ? (accessCode ? `${pluginBaseUrl}?code=${accessCode}` : pluginBaseUrl)
-              : null
-
             // ── 설치 방법 (터미널 출력) ──
-            console.log(`\n  \x1b[1m설치 방법\x1b[0m`)
-
-            // 1. 턴키 (npx — 어디서든 한 줄)
-            console.log(`\n  \x1b[90m▸ 터미널 한 줄 (Claude Code, Cursor, Codex 등 모든 에이전트)\x1b[0m`)
+            console.log(`\n  \x1b[1m설치 방법\x1b[0m  \x1b[90m(Claude Code, Cursor, Codex 등 모든 에이전트)\x1b[0m`)
             console.log(`  ┌─`)
             console.log(`  │ ${npxInstallCmd}`)
             console.log(`  └─`)
-
-            // 2. Claude Code Plugin (있으면)
-            if (pluginUrl) {
-              console.log(`\n  \x1b[90m▸ Claude Code Plugin (순서대로 각각 실행)\x1b[0m`)
-              console.log(`  ┌─`)
-              console.log(`  │ /plugin marketplace add ${pluginUrl}`)
-              console.log(`  └─`)
-              console.log(`  ┌─`)
-              console.log(`  │ /plugin install ${pluginSlug}`)
-              console.log(`  └─`)
-            }
-
-            // 3. 소개 페이지
             console.log(`\n  \x1b[90m소개:\x1b[0m https://relayax.com/@${detailSlug}`)
 
             // ── 공유 텍스트 (코드블록, 그대로 복붙) ──

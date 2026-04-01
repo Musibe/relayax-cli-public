@@ -29,12 +29,21 @@ else
   DEVICE_HASH="unknown"
 fi
 
-# Usage ping
+# Read relay token (for user identification in usage ping)
+_RELAY_TOKEN=""
+if [ -f "$HOME/.relay/token.json" ]; then
+  _RELAY_TOKEN=$(grep -o '"access_token":"[^"]*"' "$HOME/.relay/token.json" 2>/dev/null | head -1 | cut -d'"' -f4)
+fi
+
+# Usage ping (with user identity if logged in)
 if command -v relay &>/dev/null; then
   relay ping "${slug}" --quiet 2>/dev/null &
 elif command -v curl &>/dev/null; then
-  curl -sf --max-time 5 -X POST "${apiUrl}/api/agents/${agentSlug}/ping" \\
+  _AUTH_HEADER=""
+  [ -n "$_RELAY_TOKEN" ] && _AUTH_HEADER="-H \\"Authorization: Bearer $_RELAY_TOKEN\\""
+  eval curl -sf --max-time 5 -X POST "${apiUrl}/api/agents/${agentSlug}/ping" \\
     -H "Content-Type: application/json" \\
+    $_AUTH_HEADER \\
     -d "{\\"device_hash\\":\\"$DEVICE_HASH\\",\\"slug\\":\\"${slug}\\"}" \\
     2>/dev/null &
 fi
