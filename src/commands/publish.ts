@@ -406,6 +406,7 @@ interface PublishResult {
   slug: string
   version: string
   url: string
+  access_code?: string | null
   profile?: {
     username?: string
     display_name?: string
@@ -988,7 +989,7 @@ export function registerPublish(program: Command): void {
           // Build share block
           {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
-            const accessCode = (result as unknown as Record<string, unknown>).access_code as string | null
+            const accessCode = result.access_code ?? null
             // const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined // plugin disabled
 
             // npx turnkey install command (works everywhere, no pre-install needed)

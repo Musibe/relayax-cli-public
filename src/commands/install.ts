@@ -134,13 +134,13 @@ export function registerInstall(program: Command): void {
                 }
                 process.exit(1)
               }
-              const claimRes = await fetch(`${API_URL}/api/agents/${slug}/claim-access`, {
+              const claimRes = await fetch(`${API_URL}/api/agents/${parsed.name}/claim-access`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ code: _opts.code }),
+                body: JSON.stringify({ code: _opts.code, owner: parsed.owner }),
                 signal: AbortSignal.timeout(10000),
               })
               if (!claimRes.ok) {
@@ -241,12 +241,21 @@ export function registerInstall(program: Command): void {
 
         // 3. Download package: prefer git clone, fallback to tar.gz
         const requestedVersion = versionMatch ? versionMatch[2] : undefined
+        let usedGit = false
         if (resolvedAgent.git_url) {
-          // Git clone path
-          checkGitInstalled()
-          const gitUrl = buildGitUrl(resolvedAgent.git_url, { code: _opts.code })
-          await clonePackage(gitUrl, agentDir, requestedVersion)
-        } else {
+          try {
+            checkGitInstalled()
+            const gitUrl = buildGitUrl(resolvedAgent.git_url, { code: _opts.code })
+            await clonePackage(gitUrl, agentDir, requestedVersion)
+            usedGit = true
+          } catch (gitErr) {
+            const gitMsg = gitErr instanceof Error ? gitErr.message : String(gitErr)
+            if (!json) {
+              console.error(`\x1b[33m⚠ git clone 실패, tar.gz로 설치합니다: ${gitMsg}\x1b[0m`)
+            }
+          }
+        }
+        if (!usedGit) {
           // Legacy tar.gz path (retry once if signed URL expired)
           let tarPath: string
           try {

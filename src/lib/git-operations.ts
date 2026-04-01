@@ -30,7 +30,11 @@ export function gitClone(url: string, destDir: string, opts?: { depth?: number }
     args.push('--depth', String(opts.depth))
   }
   args.push(url, destDir)
-  execFileSync('git', args, { stdio: 'pipe' })
+  execFileSync('git', args, {
+    stdio: 'pipe',
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    timeout: 30000,
+  })
 }
 
 export function gitAdd(dir: string, files: string = '.'): void {
