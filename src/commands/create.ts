@@ -149,7 +149,15 @@ export function registerCreate(program: Command): void {
         }
       }
 
-      // 3. .relay/relay.yaml 생성
+      // 3. recommended_scope 자동 추천
+      //    rules/ 존재 or 프레임워크 태그 → local, 그 외 → global
+      const frameworkTags = ['nextjs', 'react', 'vue', 'angular', 'svelte', 'nuxt', 'remix', 'astro', 'django', 'rails', 'laravel', 'spring', 'express', 'fastapi', 'flask']
+      const hasRules = fs.existsSync(path.join(projectPath, '.relay', 'rules'))
+        || fs.existsSync(path.join(projectPath, 'rules'))
+      const hasFrameworkTag = tags.some((t) => frameworkTags.includes(t.toLowerCase()))
+      const recommendedScope: 'global' | 'local' = (hasRules || hasFrameworkTag) ? 'local' : 'global'
+
+      // 4. .relay/relay.yaml 생성
       fs.mkdirSync(relayDir, { recursive: true })
       const yamlData: Record<string, unknown> = {
         name,
@@ -157,6 +165,7 @@ export function registerCreate(program: Command): void {
         description,
         version: '1.0.0',
         type: 'hybrid',
+        recommended_scope: recommendedScope,
         tags,
         visibility,
         contents: [],
@@ -200,14 +209,18 @@ export function registerCreate(program: Command): void {
           status: 'ok',
           name,
           slug: slug,
+          recommended_scope: recommendedScope,
           relay_yaml: 'created',
           directories: createdDirs,
           local_commands: localResults,
           global_commands: globalInstalled ? 'installed' : 'already',
         }))
       } else {
+        const scopeLabel = recommendedScope === 'global' ? '\x1b[32m글로벌\x1b[0m' : '\x1b[33m로컬\x1b[0m'
+        const scopeReason = hasRules ? 'rules/ 감지' : hasFrameworkTag ? '프레임워크 태그 감지' : '범용 에이전트'
         console.log(`\n\x1b[32m✓ ${name} 에이전트 프로젝트 생성 완료\x1b[0m\n`)
         console.log(`  .relay/relay.yaml 생성됨`)
+        console.log(`  recommended_scope: ${scopeLabel} (${scopeReason})`)
         if (createdDirs.length > 0) {
           console.log(`  디렉토리 생성: ${createdDirs.join(', ')}`)
         }

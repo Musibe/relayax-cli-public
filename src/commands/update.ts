@@ -3,7 +3,8 @@ import os from 'os'
 import path from 'path'
 import { Command } from 'commander'
 import { fetchAgentInfo, fetchAgentVersions, reportInstall } from '../lib/api.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
+import { downloadPackage, extractPackage, makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
+import { checkGitInstalled, gitFetch, gitCheckout, gitLatestTag } from '../lib/git-operations.js'
 import { uninstallAgent, deploySymlinks, removeSymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
 import { loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken } from '../lib/config.js'
 import { resolveSlug, isScopedSlug, parseSlug } from '../lib/slug.js'
@@ -80,13 +81,28 @@ export function registerUpdate(program: Command): void {
           ? path.join(os.homedir(), '.relay', 'agents', owner, name)
           : path.join(projectPath, '.relay', 'agents', owner, name)
 
-        // Download & extract
-        const tarPath = await downloadPackage(agent.package_url, tempDir)
-        if (fs.existsSync(agentDir)) {
-          fs.rmSync(agentDir, { recursive: true, force: true })
+        // Download & extract: prefer git, fallback to tar.gz
+        if (agent.git_url && fs.existsSync(path.join(agentDir, '.git'))) {
+          // Existing git clone — fetch + checkout latest tag
+          checkGitInstalled()
+          gitFetch(agentDir)
+          const latestTag = gitLatestTag(agentDir)
+          if (latestTag) {
+            gitCheckout(agentDir, latestTag)
+          }
+        } else if (agent.git_url) {
+          // No existing clone — fresh git clone
+          checkGitInstalled()
+          await clonePackage(agent.git_url, agentDir)
+        } else {
+          // Legacy tar.gz path
+          const tarPath = await downloadPackage(agent.package_url, tempDir)
+          if (fs.existsSync(agentDir)) {
+            fs.rmSync(agentDir, { recursive: true, force: true })
+          }
+          fs.mkdirSync(agentDir, { recursive: true })
+          await extractPackage(tarPath, agentDir)
         }
-        fs.mkdirSync(agentDir, { recursive: true })
-        await extractPackage(tarPath, agentDir)
 
         // Inject preamble
         injectPreambleToAgent(agentDir, slug)

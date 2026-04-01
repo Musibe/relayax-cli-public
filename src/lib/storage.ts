@@ -5,6 +5,7 @@ import { createWriteStream } from 'fs'
 import { pipeline } from 'stream/promises'
 import { Readable } from 'stream'
 import { extract } from 'tar'
+import { gitInstall } from './git-operations.js'
 
 export async function downloadPackage(
   url: string,
@@ -46,4 +47,16 @@ export function makeTempDir(): string {
 
 export function removeTempDir(dir: string): void {
   fs.rmSync(dir, { recursive: true, force: true })
+}
+
+/**
+ * Clone an agent from git URL to destination directory.
+ * Replaces downloadPackage() + extractPackage() for git-based agents.
+ */
+export async function clonePackage(
+  gitUrl: string,
+  destDir: string,
+  version?: string,
+): Promise<void> {
+  await gitInstall(gitUrl, destDir, version)
 }

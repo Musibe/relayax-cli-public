@@ -40,14 +40,24 @@ export function generateGuide(
 
   const requiresSummary = requires ? buildRequiresSummary(requires) : ''
 
+  const slugPart = scopedSlug.startsWith('@') ? scopedSlug.slice(1) : scopedSlug
+  const pluginUrl = `https://www.relayax.com/api/registry/${slugPart}/plugin`
+
   return `# ${config.name}
 
 > ${config.description}
 
 ## 설치
 
+### CLI
 \`\`\`bash
 ${installCmd}
+\`\`\`
+
+### Claude Code Plugin
+\`\`\`
+/plugin marketplace add ${pluginUrl}
+/plugin install ${config.slug.split('/').pop() ?? config.slug}
 \`\`\`
 
 ${commands.length > 0 ? `## 포함된 커맨드

@@ -4,7 +4,8 @@ import { z } from 'zod'
 import { getValidToken, API_URL, loadInstalled, loadGlobalInstalled, saveInstalled, saveGlobalInstalled } from '../lib/config.js'
 import { searchAgents, fetchAgentInfo, reportInstall, sendUsagePing } from '../lib/api.js'
 import { resolveSlug } from '../lib/slug.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
+import { downloadPackage, extractPackage, makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
+import { checkGitInstalled } from '../lib/git-operations.js'
 import { detectAgentCLIs, detectMountedCLIs, scanLocalItems, scanGlobalItems, scanMountedItems } from '../lib/ai-tools.js'
 import { injectPreambleToAgent, generatePreambleBin } from '../lib/preamble.js'
 import { uninstallAgent } from '../lib/installer.js'
@@ -124,11 +125,19 @@ export function createMcpServer(): McpServer {
 
       const tempDir = makeTempDir()
       try {
-        const tarPath = await downloadPackage(agent.package_url, tempDir)
         const agentDir = path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
-        if (fs.existsSync(agentDir)) fs.rmSync(agentDir, { recursive: true, force: true })
-        fs.mkdirSync(agentDir, { recursive: true })
-        await extractPackage(tarPath, agentDir)
+
+        if (agent.git_url) {
+          // Git clone path
+          checkGitInstalled()
+          await clonePackage(agent.git_url, agentDir)
+        } else {
+          // Legacy tar.gz path
+          const tarPath = await downloadPackage(agent.package_url, tempDir)
+          if (fs.existsSync(agentDir)) fs.rmSync(agentDir, { recursive: true, force: true })
+          fs.mkdirSync(agentDir, { recursive: true })
+          await extractPackage(tarPath, agentDir)
+        }
         injectPreambleToAgent(agentDir, fullSlug)
 
         const installed = loadInstalled()
@@ -138,26 +147,37 @@ export function createMcpServer(): McpServer {
         await reportInstall(agent.id, fullSlug, agent.version)
         sendUsagePing(agent.id, fullSlug, agent.version)
 
-        // relay.yaml에서 tags, requires 읽기 (scope 판단용)
+        // relay.yaml에서 tags, requires, recommended_scope 읽기
         let agentTags: string[] = []
         let agentRequires: unknown = null
         let hasRules = false
+        let recommendedScope: 'global' | 'local' | undefined
         try {
           const relayYamlPath = path.join(agentDir, 'relay.yaml')
           if (fs.existsSync(relayYamlPath)) {
             const cfg = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
             agentTags = (cfg.tags as string[]) ?? []
             agentRequires = cfg.requires ?? null
+            if (cfg.recommended_scope === 'global' || cfg.recommended_scope === 'local') {
+              recommendedScope = cfg.recommended_scope
+            }
           }
           hasRules = fs.existsSync(path.join(agentDir, 'rules')) && fs.readdirSync(path.join(agentDir, 'rules')).length > 0
         } catch { /* non-critical */ }
+
+        // recommended_scope가 relay.yaml에 없으면 휴리스틱으로 추론
+        if (!recommendedScope) {
+          const frameworkTags = ['nextjs', 'react', 'vue', 'angular', 'svelte', 'nuxt', 'remix', 'astro', 'django', 'rails', 'laravel', 'spring', 'express', 'fastapi', 'flask']
+          recommendedScope = (hasRules || agentTags.some((t) => frameworkTags.includes(t.toLowerCase()))) ? 'local' : 'global'
+        }
 
         const cliUpdate = await getCliUpdateWarning()
         return { content: [jsonTextWithUpdate({
           status: 'ok', agent: agent.name, slug: fullSlug, version: agent.version,
           description: agent.description ?? '', tags: agentTags, requires: agentRequires, has_rules: hasRules,
+          recommended_scope: recommendedScope,
           files: countFiles(agentDir), install_path: agentDir,
-          scope_hint: '설치 후 에이전트 성격에 따라 글로벌/로컬 배치를 사용자에게 물어보세요. tags에 특정 프레임워크가 있거나 rules/가 있으면 로컬 추천, 범용이면 글로벌 추천.',
+          scope_hint: `이 에이전트의 권장 배치 범위는 "${recommendedScope}"입니다. 사용자에게 확인 후 relay deploy --scope ${recommendedScope}로 배치하세요.`,
         }, cliUpdate)] }
       } finally {
         removeTempDir(tempDir)

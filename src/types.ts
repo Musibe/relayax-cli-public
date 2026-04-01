@@ -35,8 +35,11 @@ export interface AgentRegistryInfo {
   description?: string;
   version: string;
   package_url: string;
+  git_url?: string;
   commands: { name: string; description: string }[];
   type?: 'command' | 'passive' | 'hybrid';
+  /** 에이전트 제작자가 권장하는 배치 범위 */
+  recommended_scope?: 'global' | 'local';
   agent_details?: { name: string; description: string; uses: string[] }[];
   skill_details?: { name: string; description: string; uses: string[] }[];
   component_agents: number;

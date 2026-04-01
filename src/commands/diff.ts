@@ -1,10 +1,10 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { Command } from 'commander'
 import { fetchAgentVersions, fetchAgentInfo } from '../lib/api.js'
 import { resolveSlug } from '../lib/slug.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
-import { execSync } from 'child_process'
+import { checkGitInstalled, gitClone, gitDiff } from '../lib/git-operations.js'
 
 export function registerDiff(program: Command): void {
   program
@@ -16,6 +16,7 @@ export function registerDiff(program: Command): void {
       try {
         const resolved = await resolveSlug(slugInput)
         const versions = await fetchAgentVersions(resolved.full)
+        const info = await fetchAgentInfo(resolved.full)
 
         const ver1 = versions.find((v) => v.version === v1)
         const ver2 = versions.find((v) => v.version === v2)
@@ -28,22 +29,34 @@ export function registerDiff(program: Command): void {
           console.log(`\n\x1b[1m${resolved.full}\x1b[0m v${v1} ↔ v${v2} 비교 중...\n`)
         }
 
-        // Download both versions to temp dirs
-        const tempDir1 = makeTempDir()
-        const tempDir2 = makeTempDir()
+        // Use git diff if git_url is available
+        if (info.git_url) {
+          checkGitInstalled()
+          const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-diff-'))
 
-        try {
-          // Get download URLs for both versions via registry API
-          // For now, we use the current version's package_url as fallback
-          // The registry API returns the latest version; for specific versions,
-          // we'd need a version-specific endpoint
-          const info = await fetchAgentInfo(resolved.full)
+          try {
+            gitClone(info.git_url, tempDir)
+            const diffOutput = gitDiff(tempDir, `v${v1}`, `v${v2}`)
 
-          if (!info.package_url) {
-            throw new Error('패키지 URL을 가져올 수 없습니다')
+            if (json) {
+              console.log(JSON.stringify({
+                slug: resolved.full,
+                v1: { version: v1, created_at: ver1.created_at, changelog: ver1.changelog },
+                v2: { version: v2, created_at: ver2.created_at, changelog: ver2.changelog },
+                diff: diffOutput,
+              }))
+            } else {
+              if (diffOutput.trim()) {
+                console.log(diffOutput)
+              } else {
+                console.log('  변경 사항이 없습니다.')
+              }
+            }
+          } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
           }
-
-          // Since version-specific download isn't available yet, show versions info
+        } else {
+          // Fallback: show version info only (no git URL available)
           if (json) {
             console.log(JSON.stringify({
               slug: resolved.full,
@@ -57,11 +70,8 @@ export function registerDiff(program: Command): void {
             console.log(`  v${v2} (${new Date(ver2.created_at).toLocaleDateString('ko-KR')})`)
             if (ver2.changelog) console.log(`    ${ver2.changelog}`)
             console.log()
-            console.log(`\x1b[33m  버전별 패키지 다운로드 비교는 추후 지원 예정입니다.\x1b[0m`)
+            console.log(`\x1b[33m  git 기반 diff는 새로 배포된 에이전트에서만 지원됩니다.\x1b[0m`)
           }
-        } finally {
-          removeTempDir(tempDir1)
-          removeTempDir(tempDir2)
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

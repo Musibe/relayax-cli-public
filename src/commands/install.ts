@@ -4,7 +4,8 @@ import path from 'path'
 import { Command } from 'commander'
 import { fetchAgentInfo, reportInstall, sendUsagePing } from '../lib/api.js'
 import type { AgentRegistryInfo } from '../types.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir } from '../lib/storage.js'
+import { downloadPackage, extractPackage, makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
+import { checkGitInstalled, buildGitUrl } from '../lib/git-operations.js'
 import { loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken, API_URL } from '../lib/config.js'
 import { resolveSlug } from '../lib/slug.js'
 import { injectPreambleToAgent } from '../lib/preamble.js'
@@ -209,11 +210,10 @@ export function registerInstall(program: Command): void {
         // Re-bind as non-optional so TypeScript tracks the narrowing through nested scopes
         let resolvedAgent: AgentRegistryInfo = agent
 
-        // Scope 자동결정: --global/--local 플래그 > agent_type 기반
+        // Scope 자동결정: --global/--local 플래그 > recommended_scope > agent_type 기반
         const scope: 'global' | 'local' = _opts.global ? 'global'
           : _opts.local ? 'local'
-          : resolvedAgent.type === 'passive' ? 'local'
-          : 'global'
+          : resolvedAgent.recommended_scope ?? (resolvedAgent.type === 'passive' ? 'local' : 'global')
 
         const agentDir = scope === 'global'
           ? path.join(os.homedir(), '.relay', 'agents', parsed.owner, parsed.name)
@@ -239,30 +239,37 @@ export function registerInstall(program: Command): void {
           }
         }
 
-        // 3. Download package (retry once if signed URL expired)
-        let tarPath: string
-        try {
-          tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
-        } catch (dlErr) {
-          const dlMsg = dlErr instanceof Error ? dlErr.message : String(dlErr)
-          if (dlMsg.includes('403') || dlMsg.includes('expired')) {
-            // Signed URL expired — re-fetch agent info for new URL and retry
-            if (!json) {
-              console.error('\x1b[33m⚙ 다운로드 URL 만료, 재시도 중...\x1b[0m')
-            }
-            resolvedAgent = await fetchAgentInfo(slug)
+        // 3. Download package: prefer git clone, fallback to tar.gz
+        const requestedVersion = versionMatch ? versionMatch[2] : undefined
+        if (resolvedAgent.git_url) {
+          // Git clone path
+          checkGitInstalled()
+          const gitUrl = buildGitUrl(resolvedAgent.git_url, { code: _opts.code })
+          await clonePackage(gitUrl, agentDir, requestedVersion)
+        } else {
+          // Legacy tar.gz path (retry once if signed URL expired)
+          let tarPath: string
+          try {
             tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
-          } else {
-            throw dlErr
+          } catch (dlErr) {
+            const dlMsg = dlErr instanceof Error ? dlErr.message : String(dlErr)
+            if (dlMsg.includes('403') || dlMsg.includes('expired')) {
+              if (!json) {
+                console.error('\x1b[33m⚙ 다운로드 URL 만료, 재시도 중...\x1b[0m')
+              }
+              resolvedAgent = await fetchAgentInfo(slug)
+              tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
+            } else {
+              throw dlErr
+            }
           }
-        }
 
-        // 4. Extract to .relay/agents/<slug>/
-        if (fs.existsSync(agentDir)) {
-          fs.rmSync(agentDir, { recursive: true, force: true })
+          if (fs.existsSync(agentDir)) {
+            fs.rmSync(agentDir, { recursive: true, force: true })
+          }
+          fs.mkdirSync(agentDir, { recursive: true })
+          await extractPackage(tarPath, agentDir)
         }
-        fs.mkdirSync(agentDir, { recursive: true })
-        await extractPackage(tarPath, agentDir)
 
         // 4.5. Inject preamble (update check) into SKILL.md and commands
         injectPreambleToAgent(agentDir, slug)

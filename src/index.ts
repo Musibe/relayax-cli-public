@@ -23,6 +23,7 @@ import { registerAccess } from './commands/access.js'
 import { registerGrant } from './commands/grant.js'
 import { registerVersions } from './commands/versions.js'
 import { registerDiff } from './commands/diff.js'
+import { registerExport } from './commands/export.js'
 import { registerFeedback } from './commands/feedback.js'
 import { startMcpServer } from './mcp/server.js'
 
@@ -59,6 +60,7 @@ registerAccess(program)
 registerGrant(program)
 registerVersions(program)
 registerDiff(program)
+registerExport(program)
 registerFeedback(program)
 
 program

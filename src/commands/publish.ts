@@ -10,6 +10,9 @@ import { checkCliVersion } from '../lib/version-check.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
+import { checkGitInstalled, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
+import { generateManifests } from '../lib/manifest-generator.js'
+import type { ManifestRelayYaml } from '../lib/manifest-generator.js'
 // GUIDE_INSTRUCTION removed — share text now uses npx install command directly
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -110,6 +113,7 @@ interface RelayYaml {
   type?: 'command' | 'passive' | 'hybrid'
   source?: string
   org_slug?: string
+  platforms?: string[]
 }
 
 function parseRelayYaml(content: string): RelayYaml {
@@ -148,6 +152,7 @@ function parseRelayYaml(content: string): RelayYaml {
     type,
     source: raw.source ? String(raw.source) : undefined,
     org_slug: raw.org_slug ? String(raw.org_slug) : undefined,
+    platforms: Array.isArray(raw.platforms) ? raw.platforms.map((p: unknown) => String(p)) : undefined,
   }
 }
 
@@ -888,6 +893,43 @@ export function registerPublish(program: Command): void {
       const entryFileName = entrySlug.replace('/', '-') + '.md'
       fs.writeFileSync(path.join(commandsDir, entryFileName), entryContent)
 
+      // Check git is available
+      try {
+        checkGitInstalled()
+      } catch (gitErr) {
+        const gitMsg = gitErr instanceof Error ? gitErr.message : String(gitErr)
+        reportCliError('publish', 'GIT_NOT_FOUND', gitMsg)
+        if (json) {
+          console.error(JSON.stringify({ error: 'GIT_NOT_FOUND', message: gitMsg }))
+        } else {
+          console.error(`\x1b[31m${gitMsg}\x1b[0m`)
+        }
+        process.exit(1)
+      }
+
+      // Generate platform manifests (after preamble/command, before git commit)
+      const manifestYaml: ManifestRelayYaml = {
+        name: config.name,
+        slug: config.slug,
+        description: config.description,
+        version: config.version,
+        source: config.source,
+        org_slug: config.org_slug ?? selectedOrgSlug,
+        platforms: config.platforms,
+      }
+      const manifestFiles = generateManifests(manifestYaml, relayDir)
+      for (const mf of manifestFiles) {
+        const mfPath = path.join(relayDir, mf.relativePath)
+        fs.mkdirSync(path.dirname(mfPath), { recursive: true })
+        fs.writeFileSync(mfPath, mf.content)
+      }
+      const generatedPlatforms = [...new Set(manifestFiles.map((f) => {
+        if (f.relativePath.startsWith('.claude-plugin/') || f.relativePath === 'marketplace.json') return 'claude-code'
+        if (f.relativePath.startsWith('.codex-plugin/')) return 'codex'
+        if (f.relativePath.startsWith('.agent/')) return 'antigravity'
+        return 'unknown'
+      }))]
+
       let tarPath: string | null = null
       try {
         tarPath = await createTarball(relayDir)
@@ -897,6 +939,28 @@ export function registerPublish(program: Command): void {
         }
 
         const result = await publishToApi(token, tarPath, metadata)
+
+        // Git push: commit and push to git server (non-fatal if git server unavailable)
+        try {
+          const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
+          if (gitUrl) {
+            if (!json) {
+              console.error('git 저장소에 푸시 중...')
+            }
+            const isFirstPublish = !(result as unknown as Record<string, unknown>).is_update
+            if (isFirstPublish) {
+              await gitPublishInit(relayDir, gitUrl, config.version)
+            } else {
+              await gitPublishUpdate(relayDir, gitUrl, config.version)
+            }
+          }
+        } catch (gitPushErr) {
+          // Git push failure is non-fatal — tar.gz upload already succeeded
+          if (!json) {
+            const gpMsg = gitPushErr instanceof Error ? gitPushErr.message : String(gitPushErr)
+            console.error(`\x1b[33m⚠ git push 실패 (배포는 완료됨): ${gpMsg}\x1b[0m`)
+          }
+        }
 
         // Update entry command preamble with scoped slug from server (non-fatal)
         try {
@@ -918,6 +982,20 @@ export function registerPublish(program: Command): void {
           console.log(`\n\x1b[32m✓ ${config.name} 배포 완료\x1b[0m  v${result.version}`)
           console.log(`  슬러그: \x1b[36m${result.slug}\x1b[0m`)
           console.log(`  URL:    \x1b[36m${result.url}\x1b[0m`)
+
+          // Show generated platform manifests
+          if (generatedPlatforms.length > 0) {
+            console.log(`\n  \x1b[90m플랫폼 매니페스트:\x1b[0m ${generatedPlatforms.join(', ')}`)
+          }
+
+          // Show Claude Code plugin install command if claude-code manifest was generated
+          if (generatedPlatforms.includes('claude-code')) {
+            const pluginSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
+            const pluginUrl = `${API_URL}/api/registry/@${pluginSlug}/plugin`
+            console.log(`\n  \x1b[90mClaude Code 플러그인:\x1b[0m`)
+            console.log(`  \x1b[36m/plugin marketplace add ${pluginUrl}\x1b[0m`)
+          }
+
           // Show shareable onboarding guide as a plain copyable block
           if (isTTY) {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
