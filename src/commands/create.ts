@@ -83,8 +83,8 @@ export function registerCreate(program: Command): void {
             message: '공개 범위를 선택하세요.',
             fix: `relay create ${name} --description "${description}" --visibility <visibility> --json`,
             options: [
-              { value: 'public', label: '공개 — 조직 밖의 누구나 사용 가능' },
-              { value: 'private', label: '비공개 — 조직 내의 허가된 사용자만 사용 가능' },
+              { value: 'public', label: '공개 — 누구나 검색 및 설치 가능' },
+              { value: 'private', label: '비공개 — 허가 코드 등록자만 사용 가능' },
               { value: 'internal', label: '내부 — 조직 내의 누구나 사용 가능' },
             ],
           }))
@@ -141,8 +141,8 @@ export function registerCreate(program: Command): void {
           visibility = await promptSelect<'public' | 'private' | 'internal'>({
             message: '공개 범위:',
             choices: [
-              { name: '공개 — 조직 밖의 누구나 사용 가능', value: 'public' },
-              { name: '비공개 — 조직 내의 허가된 사용자만 사용 가능', value: 'private' },
+              { name: '공개 — 누구나 검색 및 설치 가능', value: 'public' },
+              { name: '비공개 — 허가 코드 등록자만 사용 가능', value: 'private' },
               { name: '내부 — 조직 내의 누구나 사용 가능', value: 'internal' },
             ],
           })

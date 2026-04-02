@@ -70,4 +70,13 @@ program
     await startMcpServer()
   })
 
+// 모든 명령 실행 전 버전 표시 (--json, mcp, --version, --help 제외)
+program.hook('preAction', (_thisCommand, actionCommand) => {
+  const isJson = program.opts().json ?? false
+  const isMcp = actionCommand.name() === 'mcp'
+  if (!isJson && !isMcp && process.stderr.isTTY) {
+    process.stderr.write(`\x1b[2mrelay v${pkg.version}\x1b[0m\n`)
+  }
+})
+
 program.parse()

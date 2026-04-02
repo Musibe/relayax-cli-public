@@ -19,12 +19,11 @@ export function registerInstall(program: Command): void {
   program
     .command('install <slug>')
     .description('에이전트 패키지를 .relay/agents/에 다운로드합니다')
-    .option('--join-code <code>', '초대 코드 (Organization 에이전트 설치 시 자동 가입)')
-    .option('--code <code>', '접근 코드 (private 에이전트 설치 시)')
+    .option('--code <code>', '접근 코드 (비공개/내부 에이전트 설치 시)')
     .option('--global', '글로벌 설치 (홈 디렉토리)')
     .option('--local', '로컬 설치 (프로젝트 디렉토리)')
     .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
-    .action(async (slugInput: string, _opts: { joinCode?: string; code?: string; global?: boolean; local?: boolean; project?: string }) => {
+    .action(async (slugInput: string, _opts: { code?: string; global?: boolean; local?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = resolveProjectPath(_opts.project)
       const tempDir = makeTempDir()
@@ -70,8 +69,8 @@ export function registerInstall(program: Command): void {
           return token ?? null
         }
 
-        // Pre-fetch auto-login: --join-code and --code always require auth.
-        if (_opts.joinCode || _opts.code) {
+        // Pre-fetch auto-login: --code always requires auth.
+        if (_opts.code) {
           const token = await ensureToken()
           if (!token) {
             if (json) {
@@ -106,19 +105,10 @@ export function registerInstall(program: Command): void {
               }
             } catch { /* ignore parse errors */ }
 
-            // Task 2.1: --join-code provided and not yet a member → join org then retry
-            if (_opts.joinCode && membershipStatus !== 'member') {
+            // --code provided → use unified access-codes API (handles both org join and agent grant)
+            if (_opts.code) {
               if (!json) {
-                console.error('\x1b[33m⚙ 초대 코드로 Organization에 가입합니다...\x1b[0m')
-              }
-              const { joinOrg } = await import('./join.js')
-              await joinOrg(parsed.owner, _opts.joinCode)
-              agent = await fetchAgentInfo(slug)
-            }
-            // Task 2.2: --code provided and agent is private → claim access then retry
-            else if (_opts.code && (errorVisibility === 'private' || purchaseInfo)) {
-              if (!json) {
-                console.error('\x1b[33m⚙ 접근 코드로 에이전트 접근 권한을 요청합니다...\x1b[0m')
+                console.error('\x1b[33m⚙ 접근 코드로 권한을 요청합니다...\x1b[0m')
               }
               const token = await getValidToken()
               if (!token) {
@@ -134,20 +124,19 @@ export function registerInstall(program: Command): void {
                 }
                 process.exit(1)
               }
-              const claimRes = await fetch(`${API_URL}/api/agents/${parsed.name}/claim-access`, {
+              const codeRes = await fetch(`${API_URL}/api/access-codes/${_opts.code}/use`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ code: _opts.code, owner: parsed.owner }),
                 signal: AbortSignal.timeout(10000),
               })
-              if (!claimRes.ok) {
-                const claimBody = (await claimRes.json().catch(() => ({}))) as { error?: string; message?: string }
-                const claimErrCode = claimBody.error ?? String(claimRes.status)
-                if (claimErrCode === 'INVALID_LINK') throw new Error('초대 링크가 유효하지 않거나 만료되었습니다.')
-                throw new Error(claimBody.message ?? `접근 권한 요청 실패 (${claimRes.status})`)
+              if (!codeRes.ok) {
+                const codeBody = (await codeRes.json().catch(() => ({}))) as { error?: string; message?: string }
+                const codeErrCode = codeBody.error ?? String(codeRes.status)
+                if (codeErrCode === 'INVALID_LINK') throw new Error('접근 코드가 유효하지 않거나 만료되었습니다.')
+                throw new Error(codeBody.message ?? `접근 권한 요청 실패 (${codeRes.status})`)
               }
               agent = await fetchAgentInfo(slug)
             }
@@ -192,11 +181,11 @@ export function registerInstall(program: Command): void {
                   error: 'ACCESS_REQUIRED',
                   message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
-                  fix: '초대 코드가 있으면 `relay install ' + slugInput + ' --join-code <코드>`로 가입하세요.',
+                  fix: '접근 코드가 있으면 `relay install ' + slugInput + ' --code <코드>`로 설치하세요.',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
-                console.error('\x1b[33m초대 코드가 있으면 `relay install ' + slugInput + ' --join-code <코드>`로 가입하세요.\x1b[0m')
+                console.error('\x1b[33m접근 코드가 있으면 `relay install ' + slugInput + ' --code <코드>`로 설치하세요.\x1b[0m')
               }
               process.exit(1)
             }

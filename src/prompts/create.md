@@ -91,8 +91,8 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 선택에 따라 **사용자에게 질문하여 visibility를 물어봅니다:**
 - **Org 없이 배포**: `public`, `private` (2개)
 - **Org에 배포**: `public`, `private`, `internal` (3개)
-- `public` — 조직 밖의 누구나 사용 가능
-- `private` — 조직 내의 허가된 사용자만 사용 가능
+- `public` — 누구나 검색 및 설치 가능 (Org: 조직 밖의 누구나 사용 가능)
+- `private` — 허가 코드 등록자만 사용 가능 (Org: 조직 내의 허가된 사용자만 사용 가능)
 - `internal` — 조직 내의 누구나 사용 가능 (Org 배포 시에만 선택 가능)
 
 ### 5. relay.yaml 작성 & 배포

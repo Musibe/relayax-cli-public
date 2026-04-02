@@ -10,7 +10,7 @@ import { checkCliVersion } from '../lib/version-check.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
-import { checkGitInstalled, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
+import { checkGitInstalled, buildGitUrl, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
 import { generateManifests } from '../lib/manifest-generator.js'
 import type { ManifestRelayYaml } from '../lib/manifest-generator.js'
 // GUIDE_INSTRUCTION removed — share text now uses npx install command directly
@@ -805,28 +805,27 @@ export function registerPublish(program: Command): void {
         }
         const currentVisLabel = visLabelMap[config.visibility ?? 'public'] ?? config.visibility
 
-        const confirmVisChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = hasOrg
-            ? [
-              {
-                name: `공개 — 조직 밖의 누구나 사용 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
-                value: 'public',
-              },
-              {
-                name: '비공개 — 조직 내의 허가된 사용자만 사용 가능',
-                value: 'private',
-              },
-            ]
-            : [
-              {
-                name: `공개 — 누구나 검색 및 설치 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
-                value: 'public',
-              },
-              {
-                name: '비공개 — 허가 코드 등록자만 사용 가능',
-                value: 'private',
-              },
-            ]
-        if (hasOrg) {
+        const currentVis = config.visibility ?? defaultVisibility
+        const confirmVisChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = [
+          {
+            name: `${currentVisLabel} 유지`,
+            value: currentVis as 'public' | 'private' | 'internal',
+          },
+        ]
+        // 나머지 옵션 추가 (현재 값 제외)
+        if (currentVis !== 'public') {
+          confirmVisChoices.push({
+            name: hasOrg ? '공개 — 조직 밖의 누구나 사용 가능' : '공개 — 누구나 검색 및 설치 가능',
+            value: 'public',
+          })
+        }
+        if (currentVis !== 'private') {
+          confirmVisChoices.push({
+            name: hasOrg ? '비공개 — 조직 내의 허가된 사용자만 사용 가능' : '비공개 — 허가 코드 등록자만 사용 가능',
+            value: 'private',
+          })
+        }
+        if (hasOrg && currentVis !== 'internal') {
           confirmVisChoices.push({
             name: '내부 — 조직 내의 누구나 사용 가능',
             value: 'internal',
@@ -834,9 +833,9 @@ export function registerPublish(program: Command): void {
         }
 
         const newVisibility = await promptConfirmVis<'public' | 'private' | 'internal'>({
-          message: `공개 범위: ${currentVisLabel} — 유지하거나 변경하세요`,
+          message: `공개 범위: ${currentVisLabel}`,
           choices: confirmVisChoices,
-          default: config.visibility ?? defaultVisibility,
+          default: currentVis,
         })
 
         if (newVisibility !== config.visibility) {
@@ -969,8 +968,9 @@ export function registerPublish(program: Command): void {
         const result = await publishToApi(token, tarPath, metadata)
 
         // Git push: commit and push to git server (required)
-        const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
-        if (gitUrl) {
+        const gitUrlRaw = (result as unknown as Record<string, unknown>).git_url as string | undefined
+        if (gitUrlRaw) {
+          const gitUrl = buildGitUrl(gitUrlRaw, { token })
           if (!json) {
             console.error('git 저장소에 푸시 중...')
           }
@@ -1025,9 +1025,7 @@ export function registerPublish(program: Command): void {
             // npx turnkey install command (works everywhere, no pre-install needed)
             const visibility = config.visibility ?? 'public'
             let npxInstallCmd: string
-            if (visibility === 'internal' && accessCode) {
-              npxInstallCmd = `npx relayax-cli install ${result.slug} --join-code ${accessCode}`
-            } else if (visibility === 'private' && accessCode) {
+            if ((visibility === 'internal' || visibility === 'private') && accessCode) {
               npxInstallCmd = `npx relayax-cli install ${result.slug} --code ${accessCode}`
             } else {
               npxInstallCmd = `npx relayax-cli install ${result.slug}`
