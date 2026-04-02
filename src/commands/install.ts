@@ -208,24 +208,20 @@ export function registerInstall(program: Command): void {
           ? path.join(os.homedir(), '.relay', 'agents', parsed.owner, parsed.name)
           : path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
 
-        // 2. Visibility check + auto-login (internal agents always require a token)
-        const visibility = resolvedAgent.visibility ?? 'public'
-        if (visibility === 'internal') {
-          const token = await ensureToken()
-          if (!token) {
-            if (json) {
-              console.error(JSON.stringify({
-                error: 'LOGIN_REQUIRED',
-                visibility,
-                slug,
-                message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
-                fix: 'relay login 실행 후 재시도하세요.',
-              }))
-            } else {
-              console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
-            }
-            process.exit(1)
+        // 2. 로그인 필수 (git clone에 relay token 필요)
+        const token = await ensureToken()
+        if (!token) {
+          if (json) {
+            console.error(JSON.stringify({
+              error: 'LOGIN_REQUIRED',
+              slug,
+              message: '로그인이 필요합니다. relay login을 먼저 실행하세요.',
+              fix: 'relay login 실행 후 재시도하세요.',
+            }))
+          } else {
+            console.error('\x1b[31m로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
           }
+          process.exit(1)
         }
 
         // 3. Download package via git clone
@@ -241,7 +237,7 @@ export function registerInstall(program: Command): void {
         }
 
         checkGitInstalled()
-        const gitUrl = buildGitUrl(resolvedAgent.git_url, { code: _opts.code })
+        const gitUrl = buildGitUrl(resolvedAgent.git_url, { token })
         await clonePackage(gitUrl, agentDir, requestedVersion)
 
         // Verify clone has actual files (not just .git)
