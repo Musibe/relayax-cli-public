@@ -4,7 +4,7 @@ import path from 'path'
 import { Command } from 'commander'
 import { fetchAgentInfo, reportInstall, sendUsagePing } from '../lib/api.js'
 import type { AgentRegistryInfo } from '../types.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
+import { makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
 import { checkGitInstalled, buildGitUrl } from '../lib/git-operations.js'
 import { loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken, API_URL } from '../lib/config.js'
 import { resolveSlug } from '../lib/slug.js'
@@ -239,45 +239,33 @@ export function registerInstall(program: Command): void {
           }
         }
 
-        // 3. Download package: prefer git clone, fallback to tar.gz
+        // 3. Download package via git clone
         const requestedVersion = versionMatch ? versionMatch[2] : undefined
-        let usedGit = false
-        if (resolvedAgent.git_url) {
-          try {
-            checkGitInstalled()
-            const gitUrl = buildGitUrl(resolvedAgent.git_url, { code: _opts.code })
-            await clonePackage(gitUrl, agentDir, requestedVersion)
-            usedGit = true
-          } catch (gitErr) {
-            const gitMsg = gitErr instanceof Error ? gitErr.message : String(gitErr)
-            if (!json) {
-              console.error(`\x1b[33m⚠ git clone 실패, tar.gz로 설치합니다: ${gitMsg}\x1b[0m`)
-            }
+        if (!resolvedAgent.git_url) {
+          const errMsg = '이 에이전트는 재publish가 필요합니다. 빌더에게 문의하세요.'
+          if (json) {
+            console.log(JSON.stringify({ error: 'NO_GIT_URL', message: errMsg }))
+          } else {
+            console.error(`\x1b[31m✖ ${errMsg}\x1b[0m`)
           }
+          process.exit(1)
         }
-        if (!usedGit) {
-          // Legacy tar.gz path (retry once if signed URL expired)
-          let tarPath: string
-          try {
-            tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
-          } catch (dlErr) {
-            const dlMsg = dlErr instanceof Error ? dlErr.message : String(dlErr)
-            if (dlMsg.includes('403') || dlMsg.includes('expired')) {
-              if (!json) {
-                console.error('\x1b[33m⚙ 다운로드 URL 만료, 재시도 중...\x1b[0m')
-              }
-              resolvedAgent = await fetchAgentInfo(slug)
-              tarPath = await downloadPackage(resolvedAgent.package_url, tempDir)
-            } else {
-              throw dlErr
-            }
-          }
 
-          if (fs.existsSync(agentDir)) {
-            fs.rmSync(agentDir, { recursive: true, force: true })
+        checkGitInstalled()
+        const gitUrl = buildGitUrl(resolvedAgent.git_url, { code: _opts.code })
+        await clonePackage(gitUrl, agentDir, requestedVersion)
+
+        // Verify clone has actual files (not just .git)
+        const clonedEntries = fs.readdirSync(agentDir).filter((f) => f !== '.git')
+        if (clonedEntries.length === 0) {
+          fs.rmSync(agentDir, { recursive: true, force: true })
+          const errMsg = '에이전트 패키지가 비어있습니다. 빌더에게 재publish를 요청하세요.'
+          if (json) {
+            console.log(JSON.stringify({ error: 'EMPTY_PACKAGE', message: errMsg }))
+          } else {
+            console.error(`\x1b[31m✖ ${errMsg}\x1b[0m`)
           }
-          fs.mkdirSync(agentDir, { recursive: true })
-          await extractPackage(tarPath, agentDir)
+          process.exit(1)
         }
 
         // 4.5. Inject preamble (update check) into SKILL.md and commands

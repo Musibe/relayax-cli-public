@@ -941,25 +941,28 @@ export function registerPublish(program: Command): void {
 
         const result = await publishToApi(token, tarPath, metadata)
 
-        // Git push: commit and push to git server (non-fatal if git server unavailable)
-        try {
-          const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
-          if (gitUrl) {
-            if (!json) {
-              console.error('git 저장소에 푸시 중...')
-            }
+        // Git push: commit and push to git server (required)
+        const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined
+        if (gitUrl) {
+          if (!json) {
+            console.error('git 저장소에 푸시 중...')
+          }
+          try {
             const isFirstPublish = !(result as unknown as Record<string, unknown>).is_update
             if (isFirstPublish) {
               await gitPublishInit(relayDir, gitUrl, config.version)
             } else {
               await gitPublishUpdate(relayDir, gitUrl, config.version)
             }
-          }
-        } catch (gitPushErr) {
-          // Git push failure is non-fatal — tar.gz upload already succeeded
-          if (!json) {
+          } catch (gitPushErr) {
             const gpMsg = gitPushErr instanceof Error ? gitPushErr.message : String(gitPushErr)
-            console.error(`\x1b[33m⚠ git push 실패 (배포는 완료됨): ${gpMsg}\x1b[0m`)
+            if (json) {
+              console.log(JSON.stringify({ error: 'GIT_PUSH_FAILED', message: `git push 실패: ${gpMsg}` }))
+            } else {
+              console.error(`\x1b[31m✖ git push 실패: ${gpMsg}\x1b[0m`)
+              console.error('\x1b[33m  재시도하려면 relay publish를 다시 실행하세요.\x1b[0m')
+            }
+            process.exit(1)
           }
         }
 

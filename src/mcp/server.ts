@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { getValidToken, API_URL, loadInstalled, loadGlobalInstalled, saveInstalled, saveGlobalInstalled } from '../lib/config.js'
 import { searchAgents, fetchAgentInfo, reportInstall, sendUsagePing } from '../lib/api.js'
 import { resolveSlug } from '../lib/slug.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
+import { makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
 import { checkGitInstalled } from '../lib/git-operations.js'
 import { detectAgentCLIs, detectMountedCLIs, scanLocalItems, scanGlobalItems, scanMountedItems } from '../lib/ai-tools.js'
 import { injectPreambleToAgent, generatePreambleBin } from '../lib/preamble.js'
@@ -127,16 +127,17 @@ export function createMcpServer(): McpServer {
       try {
         const agentDir = path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
 
-        if (agent.git_url) {
-          // Git clone path
-          checkGitInstalled()
-          await clonePackage(agent.git_url, agentDir)
-        } else {
-          // Legacy tar.gz path
-          const tarPath = await downloadPackage(agent.package_url, tempDir)
-          if (fs.existsSync(agentDir)) fs.rmSync(agentDir, { recursive: true, force: true })
-          fs.mkdirSync(agentDir, { recursive: true })
-          await extractPackage(tarPath, agentDir)
+        if (!agent.git_url) {
+          return { content: [jsonText({ error: 'NO_GIT_URL', message: '이 에이전트는 재publish가 필요합니다. 빌더에게 문의하세요.' })], isError: true }
+        }
+        checkGitInstalled()
+        await clonePackage(agent.git_url, agentDir)
+
+        // Verify clone has actual files
+        const clonedEntries = fs.readdirSync(agentDir).filter((f: string) => f !== '.git')
+        if (clonedEntries.length === 0) {
+          fs.rmSync(agentDir, { recursive: true, force: true })
+          return { content: [jsonText({ error: 'EMPTY_PACKAGE', message: '에이전트 패키지가 비어있습니다. 빌더에게 재publish를 요청하세요.' })], isError: true }
         }
         injectPreambleToAgent(agentDir, fullSlug)
 
