@@ -1031,14 +1031,7 @@ export function registerPublish(program: Command): void {
               npxInstallCmd = `npx relayax-cli install ${result.slug}`
             }
 
-            // ── 설치 방법 (터미널 출력) ──
-            console.log(`\n  \x1b[1m설치 방법\x1b[0m  \x1b[90m(Claude Code, Cursor, Codex 등 모든 에이전트)\x1b[0m`)
-            console.log(`  ┌─`)
-            console.log(`  │ ${npxInstallCmd}`)
-            console.log(`  └─`)
-            console.log(`\n  \x1b[90m소개:\x1b[0m https://relayax.com/@${detailSlug}`)
-
-            // ── 공유 텍스트 (코드블록, 그대로 복붙) ──
+            // ── 공유 텍스트 (박스, 그대로 복붙) ──
             if (isTTY) {
               const shareBlock = [
                 `[${config.name}] 설치하기`,
