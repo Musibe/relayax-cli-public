@@ -20,6 +20,18 @@ export function checkGitInstalled(): void {
 
 // ─── Core Git Operations ───
 
+// Credential helper/askpass를 비활성화하여 URL에 포함된 토큰만 사용.
+// Cursor/VSCode가 GIT_ASKPASS를 주입하면 relay 토큰 대신 IDE 인증을 시도하여 실패함.
+const GIT_ENV: NodeJS.ProcessEnv = {
+  ...process.env,
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_ASKPASS: '',
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_COUNT: '1',
+  GIT_CONFIG_KEY_0: 'credential.helper',
+  GIT_CONFIG_VALUE_0: '',
+}
+
 export function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
 }
@@ -32,7 +44,7 @@ export function gitClone(url: string, destDir: string, opts?: { depth?: number }
   args.push(url, destDir)
   execFileSync('git', args, {
     stdio: 'pipe',
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    env: GIT_ENV,
     timeout: 30000,
   })
 }
@@ -56,15 +68,15 @@ export function gitPush(dir: string, remote: string, refspec?: string): void {
   const args = ['push', remote]
   if (refspec) args.push(refspec)
   args.push('--tags')
-  execFileSync('git', args, { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', args, { cwd: dir, stdio: 'pipe', env: GIT_ENV })
 }
 
 export function gitFetch(dir: string): void {
-  execFileSync('git', ['fetch', '--tags'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['fetch', '--tags'], { cwd: dir, stdio: 'pipe', env: GIT_ENV })
 }
 
 export function gitCheckout(dir: string, ref: string): void {
-  execFileSync('git', ['checkout', ref], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['checkout', ref], { cwd: dir, stdio: 'pipe', env: GIT_ENV })
 }
 
 export function gitDiff(dir: string, from: string, to: string): string {

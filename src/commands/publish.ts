@@ -520,16 +520,16 @@ export function registerPublish(program: Command): void {
         const visibility = await promptSelect<'public' | 'private' | 'internal'>({
           message: '공개 범위:',
           choices: [
-            { name: '공개 — 누구나 설치', value: 'public' },
-            { name: '링크 공유 — 접근 링크가 있는 사람만 설치', value: 'private' },
-            { name: '비공개 — Org 멤버만', value: 'internal' },
+            { name: '공개 — 누구나 검색 및 설치 가능', value: 'public' },
+            { name: '비공개 — 허가 코드 등록자만 사용 가능', value: 'private' },
+            { name: '내부 — 조직 내의 누구나 사용 가능', value: 'internal' },
           ],
         })
 
         if (visibility === 'private') {
-          console.error('\x1b[2m💡 링크 공유 에이전트는 웹 대시보드에서 접근 링크와 구매 안내를 설정하세요: www.relayax.com/dashboard\x1b[0m')
+          console.error('\x1b[2m💡 비공개 에이전트는 웹 대시보드에서 허가된 사용자를 관리하세요: www.relayax.com/dashboard\x1b[0m')
         } else if (visibility === 'internal') {
-          console.error('\x1b[2m💡 비공개 에이전트는 Org를 통해 멤버를 관리하세요: www.relayax.com/dashboard/agents\x1b[0m')
+          console.error('\x1b[2m💡 내부 에이전트는 조직 멤버 전체가 사용할 수 있습니다: www.relayax.com/dashboard/agents\x1b[0m')
         }
         console.error('')
 
@@ -732,19 +732,30 @@ export function registerPublish(program: Command): void {
           const { select: promptSelect } = await import('@inquirer/prompts')
           console.error(`\n\x1b[33m⚠ relay.yaml에 visibility가 설정되지 않았습니다.\x1b[0m  (기본값: ${defaultVisibility === 'public' ? '공개' : '비공개'})`)
 
-          const visChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = [
-            {
-              name: `공개 — 누구나 설치${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
-              value: 'public',
-            },
-            {
-              name: '링크 공유 — 접근 링크가 있는 사람만 설치',
-              value: 'private',
-            },
-          ]
+          const visChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = hasOrg
+            ? [
+              {
+                name: `공개 — 조직 밖의 누구나 사용 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+                value: 'public',
+              },
+              {
+                name: '비공개 — 조직 내의 허가된 사용자만 사용 가능',
+                value: 'private',
+              },
+            ]
+            : [
+              {
+                name: `공개 — 누구나 검색 및 설치 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+                value: 'public',
+              },
+              {
+                name: '비공개 — 허가 코드 등록자만 사용 가능',
+                value: 'private',
+              },
+            ]
           if (hasOrg) {
             visChoices.push({
-              name: '비공개 — Org 멤버만 접근',
+              name: '내부 — 조직 내의 누구나 사용 가능',
               value: 'internal',
             })
           }
@@ -761,12 +772,17 @@ export function registerPublish(program: Command): void {
           console.error(`  → relay.yaml에 visibility: ${config.visibility} 저장됨\n`)
         } else {
           reportCliError('publish', 'MISSING_VISIBILITY', 'visibility not set in relay.yaml')
-          const visOptions: { value: string; label: string }[] = [
-            { value: 'public', label: '공개 — 누구나 설치' },
-            { value: 'private', label: '링크 공유 — 접근 링크가 있는 사람만 설치' },
-          ]
+          const visOptions: { value: string; label: string }[] = hasOrg
+            ? [
+              { value: 'public', label: '공개 — 조직 밖의 누구나 사용 가능' },
+              { value: 'private', label: '비공개 — 조직 내의 허가된 사용자만 사용 가능' },
+            ]
+            : [
+              { value: 'public', label: '공개 — 누구나 검색 및 설치 가능' },
+              { value: 'private', label: '비공개 — 허가 코드 등록자만 사용 가능' },
+            ]
           if (hasOrg) {
-            visOptions.push({ value: 'internal', label: '비공개 — Org 멤버만 접근' })
+            visOptions.push({ value: 'internal', label: '내부 — 조직 내의 누구나 사용 가능' })
           }
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
@@ -784,24 +800,35 @@ export function registerPublish(program: Command): void {
         const { select: promptConfirmVis } = await import('@inquirer/prompts')
         const visLabelMap: Record<string, string> = {
           public: '공개',
-          private: '링크공유',
-          internal: '비공개',
+          private: '비공개',
+          internal: '내부',
         }
         const currentVisLabel = visLabelMap[config.visibility ?? 'public'] ?? config.visibility
 
-        const confirmVisChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = [
-            {
-              name: `공개 — 누구나 설치${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
-              value: 'public',
-            },
-            {
-              name: '링크공유 — 접근 링크가 있는 사람만 설치',
-              value: 'private',
-            },
-          ]
+        const confirmVisChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = hasOrg
+            ? [
+              {
+                name: `공개 — 조직 밖의 누구나 사용 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+                value: 'public',
+              },
+              {
+                name: '비공개 — 조직 내의 허가된 사용자만 사용 가능',
+                value: 'private',
+              },
+            ]
+            : [
+              {
+                name: `공개 — 누구나 검색 및 설치 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+                value: 'public',
+              },
+              {
+                name: '비공개 — 허가 코드 등록자만 사용 가능',
+                value: 'private',
+              },
+            ]
         if (hasOrg) {
           confirmVisChoices.push({
-            name: '비공개 — Org 멤버만 접근',
+            name: '내부 — 조직 내의 누구나 사용 가능',
             value: 'internal',
           })
         }

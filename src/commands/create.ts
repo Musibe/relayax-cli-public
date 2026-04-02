@@ -83,9 +83,9 @@ export function registerCreate(program: Command): void {
             message: '공개 범위를 선택하세요.',
             fix: `relay create ${name} --description "${description}" --visibility <visibility> --json`,
             options: [
-              { value: 'public', label: '공개 — 누구나 설치' },
-              { value: 'private', label: '링크 공유 — 접근 링크가 있는 사람만' },
-              { value: 'internal', label: '비공개 — Org 멤버만' },
+              { value: 'public', label: '공개 — 조직 밖의 누구나 사용 가능' },
+              { value: 'private', label: '비공개 — 조직 내의 허가된 사용자만 사용 가능' },
+              { value: 'internal', label: '내부 — 조직 내의 누구나 사용 가능' },
             ],
           }))
           process.exit(1)
@@ -97,8 +97,8 @@ export function registerCreate(program: Command): void {
             fix: `visibility는 public, private, internal 중 하나여야 합니다.`,
             options: [
               { value: 'public', label: '공개' },
-              { value: 'private', label: '링크 공유' },
-              { value: 'internal', label: '비공개' },
+              { value: 'private', label: '비공개' },
+              { value: 'internal', label: '내부' },
             ],
           }))
           process.exit(1)
@@ -141,9 +141,9 @@ export function registerCreate(program: Command): void {
           visibility = await promptSelect<'public' | 'private' | 'internal'>({
             message: '공개 범위:',
             choices: [
-              { name: '공개', value: 'public' },
-              { name: '링크 공유 (접근 링크 필요)', value: 'private' },
-              { name: '비공개 (Org 멤버만)', value: 'internal' },
+              { name: '공개 — 조직 밖의 누구나 사용 가능', value: 'public' },
+              { name: '비공개 — 조직 내의 허가된 사용자만 사용 가능', value: 'private' },
+              { name: '내부 — 조직 내의 누구나 사용 가능', value: 'internal' },
             ],
           })
         }
