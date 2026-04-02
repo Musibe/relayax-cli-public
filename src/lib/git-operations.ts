@@ -155,7 +155,7 @@ export async function gitPublishUpdate(
     gitAdd(sourceDir)
     gitCommit(sourceDir, `v${version}`)
     gitTag(sourceDir, `v${version}`)
-    gitPush(sourceDir, 'origin')
+    gitPush(sourceDir, 'origin', 'HEAD:main')
   } finally {
     fs.rmSync(tempCloneDir, { recursive: true, force: true })
   }

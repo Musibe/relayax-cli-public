@@ -615,6 +615,27 @@ export function registerPublish(program: Command): void {
         }
       }
 
+      // Auto-sync: relay.yaml의 contents에 정의된 소스를 .relay/에 동기화
+      try {
+        const yamlContent = fs.readFileSync(relayYamlPath, 'utf-8')
+        const yamlConfig = yaml.load(yamlContent) as Record<string, unknown>
+        const contents = (yamlConfig.contents as unknown[]) ?? []
+        if (contents.length > 0) {
+          const { computeContentsDiff, syncContentsToRelay } = await import('./package.js')
+          const { diff: contentsDiff } = computeContentsDiff(contents as Parameters<typeof computeContentsDiff>[0], relayDir, agentDir)
+          const hasChanges = contentsDiff.some((d: { status: string }) => d.status === 'modified')
+          if (hasChanges) {
+            syncContentsToRelay(contents as Parameters<typeof syncContentsToRelay>[0], contentsDiff as Parameters<typeof syncContentsToRelay>[1], relayDir, agentDir)
+            if (!json) {
+              const changedNames = contentsDiff.filter((d: { status: string }) => d.status === 'modified').map((d: { name: string }) => d.name)
+              console.error(`\x1b[36m⚙ 소스 동기화:\x1b[0m ${changedNames.join(', ')}`)
+            }
+          }
+        }
+      } catch {
+        // sync 실패는 non-fatal — 기존 .relay/ 내용으로 publish 진행
+      }
+
       // Validate structure (콘텐츠는 .relay/ 안에 있음)
       const hasDirs = VALID_DIRS.some((d) => {
         const dirPath = path.join(relayDir, d)

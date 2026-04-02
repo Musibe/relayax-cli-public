@@ -7,7 +7,7 @@ import { resolveSlug } from '../lib/slug.js'
 import { makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
 import { checkGitInstalled } from '../lib/git-operations.js'
 import { detectAgentCLIs, detectMountedCLIs, scanLocalItems, scanGlobalItems, scanMountedItems } from '../lib/ai-tools.js'
-import { injectPreambleToAgent, generatePreambleBin } from '../lib/preamble.js'
+import { injectPreambleToAgent } from '../lib/preamble.js'
 import { uninstallAgent } from '../lib/installer.js'
 import { resolveProjectPath, resolveHome } from '../lib/paths.js'
 // prompts are used in MCP Prompt definitions below
@@ -478,54 +478,6 @@ export function createMcpServer(): McpServer {
       }
       const org = await res.json() as { slug: string; name: string }
       return { content: [jsonText({ status: 'created', org })] }
-    } catch (err) {
-      return { content: [jsonText({ error: String(err) })], isError: true }
-    }
-  })
-
-  server.tool('relay_publish', '에이전트를 마켓플레이스에 배포합니다 (.relay/ 디렉토리를 tar로 패키징하여 업로드)', {
-    project_path: z.string().optional().describe('프로젝트 경로 (.relay/relay.yaml이 있는 디렉토리)'),
-  }, async ({ project_path }) => {
-    try {
-      const projectPath = resolveMcpProjectPath(project_path)
-      const relayDir = path.join(projectPath, '.relay')
-      const relayYaml = path.join(relayDir, 'relay.yaml')
-
-      if (!fs.existsSync(relayYaml)) {
-        return { content: [jsonText({ error: 'NOT_INITIALIZED', message: '.relay/relay.yaml이 없습니다.' })], isError: true }
-      }
-
-      const token = await getValidToken()
-      if (!token) {
-        return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '배포하려면 로그인이 필요합니다.' })], isError: true }
-      }
-
-      const cfg = yaml.load(fs.readFileSync(relayYaml, 'utf-8')) as Record<string, unknown>
-      const { createTarball, publishToApi } = await import('../commands/publish.js')
-
-      // Generate bin/relay-preamble.sh (CLI publish와 동일하게)
-      generatePreambleBin(relayDir, cfg.slug as string, API_URL)
-
-      const tarPath = await createTarball(relayDir)
-      try {
-        const metadata = {
-          slug: cfg.slug as string,
-          name: cfg.name as string,
-          description: (cfg.description as string) ?? '',
-          tags: (cfg.tags as string[]) ?? [],
-          commands: [],
-          components: { skills: 0, agents: 0, rules: 0, commands: 0 },
-          version: cfg.version as string,
-          visibility: (cfg.visibility as 'public' | 'private' | 'internal') ?? 'public',
-          cli_version: pkg.version,
-        }
-
-        const result = await publishToApi(token, tarPath, metadata)
-        const cliUpdate = await getCliUpdateWarning()
-        return { content: [jsonTextWithUpdate(result as unknown as Record<string, unknown>, cliUpdate)] }
-      } finally {
-        fs.unlinkSync(tarPath)
-      }
     } catch (err) {
       return { content: [jsonText({ error: String(err) })], isError: true }
     }
