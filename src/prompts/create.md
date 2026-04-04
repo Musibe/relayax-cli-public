@@ -29,7 +29,9 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 `.relay/relay.yaml`이 있는지 확인합니다.
 
 - **없음** → 아래 "최초 생성" 플로우
-- **있음** → 아래 "업데이트" 플로우
+- **있음** → `relay package --json`으로 상태 확인
+  - `no_contents` 에러 → relay.yaml에 sources/contents가 없는 레거시 상태. `relay package --init --json`으로 소스를 스캔하고 relay.yaml에 sources를 추가한 뒤 "업데이트" 플로우 진행
+  - 정상 응답 → 아래 "업데이트" 플로우
 
 ---
 
@@ -150,11 +152,6 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 1. **배포 결과 요약** — slug, 버전, 공개 범위, URL
 2. **설치 방법** — CLI 출력에 코드블록 형태로 이미 포함되어 있으므로, 그 내용을 사용자에게 안내합니다:
    - CLI: `npx relayax-cli install {slug}`
-   - 출력에 `plugin_url`이 있으면 Claude Code Plugin (**두 명령을 순서대로 각각 실행**):
-     ```
-     ① /plugin marketplace add {pluginUrl}
-     ② /plugin install {slug}
-     ```
    - 에이전트 소개 페이지 URL
 3. **공유 텍스트** — CLI 출력의 공유 블록(┌─ ... ─┘)을 그대로 안내합니다. 팀에 바로 복붙할 수 있는 코드블록 형태입니다.
 

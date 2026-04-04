@@ -26,3 +26,5 @@
 scope 결정 기준:
 - 범용 도구 (코드 리뷰, 문서 생성, 테스트) → `relay install <slug>` (글로벌 기본)
 - 프로젝트 특화 (특정 프레임워크, 팀 컨벤션) → `relay install <slug> --local`
+
+{{ERROR_HANDLING_GUIDE}}

@@ -79,8 +79,6 @@ export function generatePreamble(slug: string, agentDir: string): string {
 [ -f "${scriptPath}" ] && bash "${scriptPath}" 2>/dev/null || true
 \`\`\`
 
-If the bash command above fails or the file is not found (sandbox/MCP environment), use the \`relay_check_update\` MCP tool instead: \`relay_check_update(slug: "${slug}")\`
-
 If output shows \`CLI_UPGRADE_AVAILABLE <old> <new>\`: tell user "relay v{new} available. Run: npm update -g relayax-cli"
 If output shows \`AGENT_UPGRADE_AVAILABLE\`: tell user "${slug} v{new} available (by @{author}). Run: relay update ${slug}"
 ${PREAMBLE_END}`

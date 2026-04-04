@@ -9,8 +9,6 @@ import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { checkGitInstalled, buildGitUrl, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
-import { generateManifests } from '../lib/manifest-generator.js'
-import type { ManifestRelayYaml } from '../lib/manifest-generator.js'
 // GUIDE_INSTRUCTION removed — share text now uses npx install command directly
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -112,7 +110,6 @@ interface RelayYaml {
   type?: 'command' | 'passive' | 'hybrid'
   source?: string
   org_slug?: string
-  platforms?: string[]
 }
 
 function parseRelayYaml(content: string): RelayYaml {
@@ -151,7 +148,6 @@ function parseRelayYaml(content: string): RelayYaml {
     type,
     source: raw.source ? String(raw.source) : undefined,
     org_slug: raw.org_slug ? String(raw.org_slug) : undefined,
-    platforms: Array.isArray(raw.platforms) ? raw.platforms.map((p: unknown) => String(p)) : undefined,
   }
 }
 
@@ -914,29 +910,6 @@ export function registerPublish(program: Command): void {
         process.exit(1)
       }
 
-      // Generate platform manifests (after preamble/command, before git commit)
-      const manifestYaml: ManifestRelayYaml = {
-        name: config.name,
-        slug: config.slug,
-        description: config.description,
-        version: config.version,
-        source: config.source,
-        org_slug: config.org_slug ?? selectedOrgSlug,
-        platforms: config.platforms,
-      }
-      const manifestFiles = generateManifests(manifestYaml, relayDir)
-      for (const mf of manifestFiles) {
-        const mfPath = path.join(relayDir, mf.relativePath)
-        fs.mkdirSync(path.dirname(mfPath), { recursive: true })
-        fs.writeFileSync(mfPath, mf.content)
-      }
-      const generatedPlatforms = [...new Set(manifestFiles.map((f) => {
-        if (f.relativePath.startsWith('.claude-plugin/') || f.relativePath === 'marketplace.json') return 'claude-code'
-        if (f.relativePath.startsWith('.codex-plugin/')) return 'codex'
-        if (f.relativePath.startsWith('.agent/')) return 'antigravity'
-        return 'unknown'
-      }))]
-
       try {
         if (!json) {
           console.error(`업로드 중...`)
@@ -985,9 +958,7 @@ export function registerPublish(program: Command): void {
         }
 
         if (json) {
-          const jsonResult = { ...(result as unknown as Record<string, unknown>) }
-          jsonResult.platforms = generatedPlatforms
-          console.log(JSON.stringify(jsonResult))
+          console.log(JSON.stringify(result))
         } else {
           console.log(`\n\x1b[32m✓ ${config.name} 배포 완료\x1b[0m  v${result.version}`)
           console.log(`  슬러그: \x1b[36m${result.slug}\x1b[0m`)
@@ -997,7 +968,6 @@ export function registerPublish(program: Command): void {
           {
             const detailSlug = result.slug.startsWith('@') ? result.slug.slice(1) : result.slug
             const accessCode = result.access_code ?? null
-            // const gitUrl = (result as unknown as Record<string, unknown>).git_url as string | undefined // plugin disabled
 
             // npx turnkey install command (works everywhere, no pre-install needed)
             const visibility = config.visibility ?? 'public'
