@@ -1,9 +1,7 @@
 import { Command } from 'commander'
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
 import yaml from 'js-yaml'
-import { create as tarCreate } from 'tar'
 import { API_URL, getValidToken } from '../lib/config.js'
 import { generatePreamble, generatePreambleBin } from '../lib/preamble.js'
 import { checkCliVersion } from '../lib/version-check.js'
@@ -50,6 +48,7 @@ export interface RequiresEnv {
   name: string
   required?: boolean
   description?: string
+  setup_hint?: string
 }
 
 export interface RequiresNpm {
@@ -373,34 +372,6 @@ function resolveLongDescription(agentDir: string, yamlValue?: string): string | 
   return undefined
 }
 
-export async function createTarball(agentDir: string): Promise<string> {
-  const tmpFile = path.join(os.tmpdir(), `relay-publish-${Date.now()}.tar.gz`)
-
-  const dirsToInclude = VALID_DIRS.filter((d) =>
-    fs.existsSync(path.join(agentDir, d))
-  )
-
-  // Include root-level files if they exist
-  const entries: string[] = [...dirsToInclude]
-  const rootFiles = ['relay.yaml', 'SKILL.md', 'guide.md']
-  for (const file of rootFiles) {
-    if (fs.existsSync(path.join(agentDir, file))) {
-      entries.push(file)
-    }
-  }
-
-  await tarCreate(
-    {
-      gzip: true,
-      file: tmpFile,
-      cwd: agentDir,
-    },
-    entries
-  )
-
-  return tmpFile
-}
-
 interface PublishResult {
   status: string
   slug: string
@@ -417,20 +388,15 @@ interface PublishResult {
 
 export async function publishToApi(
   token: string,
-  tarPath: string,
   metadata: PublishMetadata,
 ): Promise<PublishResult> {
-  const fileBuffer = fs.readFileSync(tarPath)
-  const blob = new Blob([fileBuffer], { type: 'application/gzip' })
-
-  const form = new FormData()
-  form.append('package', blob, `${metadata.slug}-${metadata.version}.tar.gz`)
-  form.append('metadata', JSON.stringify(metadata))
-
   const res = await fetch(`${API_URL}/api/publish`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(metadata),
     redirect: 'error',
   })
 
@@ -912,14 +878,7 @@ export function registerPublish(program: Command): void {
         console.error('  long_description을 활용하거나 relayax.com에서 에이전트 정보를 편집하세요.\n')
       }
 
-      // Generate guide.md (consumer install guide)
-      const { generateGuide } = await import('../lib/guide.js')
-      const guideContent = generateGuide(
-        config,
-        detectedCommands,
-        config.requires,
-      )
-      fs.writeFileSync(path.join(relayDir, 'guide.md'), guideContent)
+      // guide.md는 웹 API route에서 동적 생성 (/api/registry/{owner}/{slug}/guide.md)
 
       // Generate bin/relay-preamble.sh (self-contained tracking + update check)
       generatePreambleBin(relayDir, config.slug, API_URL)
@@ -978,15 +937,12 @@ export function registerPublish(program: Command): void {
         return 'unknown'
       }))]
 
-      let tarPath: string | null = null
       try {
-        tarPath = await createTarball(relayDir)
-
         if (!json) {
           console.error(`업로드 중...`)
         }
 
-        const result = await publishToApi(token, tarPath, metadata)
+        const result = await publishToApi(token, metadata)
 
         // Git push: commit and push to git server (required)
         const gitUrlRaw = (result as unknown as Record<string, unknown>).git_url as string | undefined
@@ -1079,10 +1035,6 @@ export function registerPublish(program: Command): void {
         reportCliError('publish', 'PUBLISH_FAILED', message)
         console.error(JSON.stringify({ error: 'PUBLISH_FAILED', message, fix: message }))
         process.exit(1)
-      } finally {
-        if (tarPath && fs.existsSync(tarPath)) {
-          fs.unlinkSync(tarPath)
-        }
       }
     })
 }

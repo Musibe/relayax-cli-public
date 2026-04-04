@@ -35,16 +35,24 @@ if [ -f "$HOME/.relay/token.json" ]; then
   _RELAY_TOKEN=$(grep -o '"access_token":"[^"]*"' "$HOME/.relay/token.json" 2>/dev/null | head -1 | cut -d'"' -f4)
 fi
 
+# CLI version (for usage tracking)
+_CLI_VERSION=""
+if command -v relay &>/dev/null; then
+  _CLI_VERSION=$(relay --version 2>/dev/null | head -1 | grep -o '[0-9][0-9.]*' || true)
+fi
+
 # Usage ping (with user identity if logged in)
 if command -v relay &>/dev/null; then
   relay ping "${slug}" --quiet 2>/dev/null &
 elif command -v curl &>/dev/null; then
   _AUTH_HEADER=""
   [ -n "$_RELAY_TOKEN" ] && _AUTH_HEADER="-H \\"Authorization: Bearer $_RELAY_TOKEN\\""
+  _CLI_VER_FIELD=""
+  [ -n "$_CLI_VERSION" ] && _CLI_VER_FIELD=",\\"cli_version\\":\\"$_CLI_VERSION\\""
   eval curl -sf --max-time 5 -X POST "${apiUrl}/api/agents/${agentSlug}/ping" \\
     -H "Content-Type: application/json" \\
     $_AUTH_HEADER \\
-    -d "{\\"device_hash\\":\\"$DEVICE_HASH\\",\\"slug\\":\\"${slug}\\"}" \\
+    -d "{\\"device_hash\\":\\"$DEVICE_HASH\\",\\"slug\\":\\"${slug}\\"$_CLI_VER_FIELD}" \\
     2>/dev/null &
 fi
 

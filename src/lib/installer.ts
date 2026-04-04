@@ -206,10 +206,11 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
         results.push({ label: 'env', status: 'ok', message: `${env.name} — 설정됨` })
       } else {
         const desc = env.description ? ` (${env.description})` : ''
+        const hint = env.setup_hint ? `\n    설정 방법:\n${env.setup_hint.split('\n').map((l: string) => `      ${l}`).join('\n')}` : ''
         results.push({
           label: 'env',
           status: env.required !== false ? 'missing' : 'warn',
-          message: `${env.name} — 미설정${desc}`,
+          message: `${env.name} — 미설정${desc}${hint}`,
         })
       }
     }

@@ -3,7 +3,7 @@ import os from 'os'
 import path from 'path'
 import { Command } from 'commander'
 import { fetchAgentInfo, fetchAgentVersions, reportInstall } from '../lib/api.js'
-import { downloadPackage, extractPackage, makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
+import { makeTempDir, removeTempDir, clonePackage } from '../lib/storage.js'
 import { checkGitInstalled, gitFetch, gitCheckout, gitLatestTag } from '../lib/git-operations.js'
 import { uninstallAgent, deploySymlinks, removeSymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
 import { loadInstalled, saveInstalled, loadGlobalInstalled, saveGlobalInstalled, getValidToken } from '../lib/config.js'
@@ -95,13 +95,7 @@ export function registerUpdate(program: Command): void {
           checkGitInstalled()
           await clonePackage(agent.git_url, agentDir)
         } else {
-          // Legacy tar.gz path
-          const tarPath = await downloadPackage(agent.package_url, tempDir)
-          if (fs.existsSync(agentDir)) {
-            fs.rmSync(agentDir, { recursive: true, force: true })
-          }
-          fs.mkdirSync(agentDir, { recursive: true })
-          await extractPackage(tarPath, agentDir)
+          throw new Error('이 에이전트는 재설치가 필요합니다. relay install로 다시 설치하세요.')
         }
 
         // Inject preamble

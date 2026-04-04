@@ -68,6 +68,9 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 - **env**: 환경변수 참조를 찾고 맥락에서 필수/선택 판단
   - 핵심 로직에서 사용 → `required: true`
   - 테스트/선택 기능에서 사용 → `required: false`
+  - cookie, token 등 비표준적 env는 `setup_hint`에 획득 방법을 기술 권장
+    - 예: `setup_hint: "1. klingai.com 로그인\n2. DevTools → Cookies\n3. cookie 문자열 복사"`
+    - 일반 API 키(OPENAI_API_KEY 등)는 description만으로 충분
 - **cli**: 외부 CLI 도구 참조 (playwright, ffmpeg 등)
 - **npm**: import/require 패키지
 - **mcp**: MCP 서버 참조 (supabase, github 등)
@@ -76,6 +79,10 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 
 보안 점검:
 - 하드코딩된 API 키, 토큰 (sk-*, ghp_*, AKIA* 등)
+- 하드코딩된 cookie 값 (Cookie:, Set-Cookie, session_id=, _ga= 등)
+- 하드코딩된 Bearer/JWT 토큰 (Bearer ey..., Authorization: 등)
+- 100자 이상의 연속 alphanumeric/base64 문자열 (시크릿 의심)
+- 단, placeholder는 무시: YOUR_XXX, <your-xxx>, sk-xxx, PASTE_HERE 등 명백한 예시값
 - 파일 컨텍스트를 읽어 실제 시크릿 vs 예시 코드를 구분
 - 발견 시 **반드시 경고**하고 환경변수 대체 안내
 

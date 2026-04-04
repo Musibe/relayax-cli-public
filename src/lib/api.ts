@@ -118,10 +118,13 @@ export async function sendUsagePing(agentId: string | null, slug: string, versio
     .update(`${hostname()}:${userInfo().username}`)
     .digest('hex')
 
+  // CLI version
+  const pkg = require('../../package.json') as { version: string }
+
   // agentId(UUID)가 있으면 UUID 경로, 없으면 slug name으로 fallback
   const pathParam = agentId || slug.replace(/^@/, '').split('/').pop() || slug
   const url = `${API_URL}/api/agents/${pathParam}/ping`
-  const payload: Record<string, string> = { device_hash: deviceHash, slug }
+  const payload: Record<string, string> = { device_hash: deviceHash, slug, cli_version: pkg.version }
   if (version) payload.installed_version = version
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
