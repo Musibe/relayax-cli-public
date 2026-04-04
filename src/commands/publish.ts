@@ -9,7 +9,6 @@ import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { checkGitInstalled, buildGitUrl, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
-// GUIDE_INSTRUCTION removed — share text now uses npx install command directly
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -867,14 +866,6 @@ export function registerPublish(program: Command): void {
       if (!json) {
         console.error(`패키지 생성 중... (${config.name} v${config.version})`)
       }
-
-      // GUIDE.html deprecation warning
-      if (fs.existsSync(path.join(relayDir, 'GUIDE.html'))) {
-        console.error('\x1b[33m⚠ GUIDE.html은 더 이상 지원되지 않습니다. 상세페이지가 가이드 역할을 합니다.\x1b[0m')
-        console.error('  long_description을 활용하거나 relayax.com에서 에이전트 정보를 편집하세요.\n')
-      }
-
-      // guide.md는 웹 API route에서 동적 생성 (/api/registry/{owner}/{slug}/guide.md)
 
       // Generate bin/relay-preamble.sh (self-contained tracking + update check)
       generatePreambleBin(relayDir, config.slug, API_URL)
