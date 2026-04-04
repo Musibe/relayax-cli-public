@@ -102,7 +102,7 @@ export function registerUpdate(program: Command): void {
         injectPreambleToAgent(agentDir, slug)
 
         // Deploy symlinks (always — handles migration from legacy deployed_files)
-        const deploy = deploySymlinks(agentDir, currentScope, projectPath)
+        const deploy = await deploySymlinks(agentDir, currentScope, projectPath)
 
         // Update installed.json
         const installRecord = {

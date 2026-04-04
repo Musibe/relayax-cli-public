@@ -88,6 +88,7 @@ export interface PublishMetadata {
   requires?: Requires
   visibility?: 'public' | 'private' | 'internal'
   type?: 'command' | 'passive' | 'hybrid'
+  recommended_scope?: 'global' | 'local'
   cli_version?: string
   agent_names?: string[]
   skill_names?: string[]
@@ -107,6 +108,7 @@ interface RelayYaml {
   requires?: Requires
   visibility?: 'public' | 'private' | 'internal'
   type?: 'command' | 'passive' | 'hybrid'
+  recommended_scope?: 'global' | 'local'
   source?: string
   org_slug?: string
 }
@@ -145,6 +147,7 @@ function parseRelayYaml(content: string): RelayYaml {
     requires,
     visibility,
     type,
+    recommended_scope: raw.recommended_scope === 'global' ? 'global' : raw.recommended_scope === 'local' ? 'local' : undefined,
     source: raw.source ? String(raw.source) : undefined,
     org_slug: raw.org_slug ? String(raw.org_slug) : undefined,
   }
@@ -412,12 +415,13 @@ export function registerPublish(program: Command): void {
     .option('--token <token>', '인증 토큰')
     .option('--space <slug>', '배포할 Space 지정')
     .option('--org <slug>', 'Organization slug 지정')
+    .option('--no-org', '개인 계정으로 배포 (Organization 무시)')
     .option('--version <version>', '배포 버전 지정 (relay.yaml 업데이트)')
     .option('--patch', 'patch 버전 범프')
     .option('--minor', 'minor 버전 범프')
     .option('--major', 'major 버전 범프')
     .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
-    .action(async (opts: { token?: string; space?: string; org?: string; version?: string; patch?: boolean; minor?: boolean; major?: boolean; project?: string }) => {
+    .action(async (opts: { token?: string; space?: string; org?: string; noOrg?: boolean; version?: string; patch?: boolean; minor?: boolean; major?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const agentDir = resolveProjectPath(opts.project)
       const relayDir = path.join(agentDir, '.relay')
@@ -632,11 +636,19 @@ export function registerPublish(program: Command): void {
         const { fetchMyOrgs } = await import('./orgs.js')
         const orgs = await fetchMyOrgs(token)
 
+        // --no-org: skip org selection entirely (personal deployment)
+        const skipOrg = opts.noOrg === true
+
         // Determine explicit org slug: --org > --space (legacy) > relay.yaml org_slug
-        const explicitOrgSlug = opts.org ?? opts.space ?? config.org_slug
+        const explicitOrgSlug = skipOrg ? undefined : (opts.org ?? opts.space ?? config.org_slug)
 
         // --org / --space / relay.yaml org_slug: resolve Org by slug
-        if (explicitOrgSlug) {
+        if (skipOrg) {
+          // Personal deployment — no org
+          if (!json) {
+            console.error('\x1b[2m  개인 계정으로 배포합니다.\x1b[0m\n')
+          }
+        } else if (explicitOrgSlug) {
           const matched = orgs.find((o) => o.slug === explicitOrgSlug)
           if (matched) {
             selectedOrgId = matched.id
@@ -685,17 +697,21 @@ export function registerPublish(program: Command): void {
             const chosenLabel = chosen?.name ?? chosenId
             console.error(`  → Organization: ${chosenLabel}\n`)
           }
-        } else if (orgs.length > 1 && json) {
-          // --json 모드 + 여러 Org: 에이전트가 선택할 수 있도록 에러 반환
-          reportCliError('publish', 'MISSING_ORG', 'multiple orgs, none selected')
+        } else if (orgs.length > 0 && json) {
+          // --json 모드 + Org 있음: 에이전트가 선택할 수 있도록 에러 반환
+          reportCliError('publish', 'MISSING_ORG', `${orgs.length} orgs, none selected`)
           console.error(JSON.stringify({
             error: 'MISSING_ORG',
-            message: '배포할 Organization을 선택하세요.',
-            fix: `relay publish --org <slug> --json`,
-            options: orgs.map((o) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
+            message: '배포 대상을 선택하세요.',
+            fix: `개인 배포: relay publish --no-org --json / Org 배포: relay publish --org <slug> --json`,
+            options: [
+              { value: '__personal__', label: '개인 계정으로 배포' },
+              ...orgs.map((o) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
+            ],
           }))
           process.exit(1)
         } else if (orgs.length > 0) {
+          // non-json, non-TTY fallback (rare) — auto-select first org
           selectedOrgId = orgs[0].id
           selectedOrgSlug = orgs[0].slug
         }
@@ -857,6 +873,7 @@ export function registerPublish(program: Command): void {
         agent_names: listDir(relayDir, 'agents'),
         skill_names: listDir(relayDir, 'skills'),
         type: config.type ?? 'hybrid',
+        recommended_scope: config.recommended_scope,
         agent_details: detectedAgents,
         skill_details: detectedSkills,
         ...(selectedOrgId ? { org_id: selectedOrgId } : {}),

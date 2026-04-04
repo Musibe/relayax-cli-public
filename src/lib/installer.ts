@@ -2,7 +2,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { execSync } from 'child_process'
-import { detectGlobalCLIs, detectAgentCLIs } from './ai-tools.js'
+import { detectGlobalCLIs, detectAgentCLIs, AI_TOOLS } from './ai-tools.js'
+import type { AITool } from './ai-tools.js'
 import type { Requires, RequiresEnv, RequiresMcp } from '../commands/publish.js'
 
 const COPY_DIRS = ['skills', 'agents', 'rules', 'commands'] as const
@@ -24,11 +25,11 @@ export interface DeployResult {
  * @param scope     'global' | 'local'
  * @param projectPath  프로젝트 루트 경로 (local scope 시 사용)
  */
-export function deploySymlinks(
+export async function deploySymlinks(
   agentDir: string,
   scope: 'global' | 'local',
   projectPath: string,
-): DeployResult {
+): Promise<DeployResult> {
   const result: DeployResult = { symlinks: [], warnings: [] }
 
   // 감지된 AI tool 목록
@@ -36,10 +37,25 @@ export function deploySymlinks(
     ? detectGlobalCLIs()
     : detectAgentCLIs(projectPath)
 
-  // Claude Code를 기본으로 포함 (글로벌에 .claude/가 없어도 생성)
+  // 글로벌: Claude Code를 기본으로 포함
   if (scope === 'global') {
     const hasClaudeCode = tools.some((t) => t.value === 'claude')
     if (!hasClaudeCode) {
+      tools.push({ name: 'Claude Code', value: 'claude', skillsDir: '.claude' })
+    }
+  }
+
+  // 로컬: AI tool 디렉토리가 없으면 TTY에서 선택
+  if (scope === 'local' && tools.length === 0) {
+    if (process.stdout.isTTY) {
+      const { checkbox } = await import('@inquirer/prompts')
+      const selected = await checkbox<AITool>({
+        message: `Select tools to set up (${AI_TOOLS.length} available)`,
+        choices: AI_TOOLS.map((t) => ({ name: t.name, value: t })),
+      })
+      tools.push(...selected)
+    } else {
+      // Non-TTY (JSON 모드 등): Claude Code 기본
       tools.push({ name: 'Claude Code', value: 'claude', skillsDir: '.claude' })
     }
   }
@@ -82,7 +98,8 @@ export function deploySymlinks(
           }
         }
 
-        fs.symlinkSync(srcPath, destPath)
+        const relativeSrc = path.relative(path.dirname(destPath), srcPath)
+        fs.symlinkSync(relativeSrc, destPath)
         result.symlinks.push(destPath)
       }
     }

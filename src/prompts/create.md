@@ -110,8 +110,17 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 - name, slug, description, version, tags
 - requires (판단 결과)
 - org, visibility
+- **recommended_scope** — 설치 시 기본 배치 범위:
+  - `local` — rules/ 디렉토리가 있거나 프레임워크 특화 태그(nextjs, react, vue, angular, svelte, nuxt, remix, astro, django, rails, laravel, spring, express, fastapi, flask)가 있을 때
+  - `global` — 그 외 범용 도구
 
-**사용자에게 질문하여 최종 확인** 후 `relay publish --json`으로 배포합니다.
+**사용자에게 질문하여 최종 확인** 후 배포합니다.
+
+배포 명령어는 사용자의 선택에 따라 다릅니다:
+- **개인 배포**: `relay publish --no-org --json`
+- **Org 배포**: `relay publish --org {org_slug} --json`
+
+⚠️ `relay publish --json`만 실행하면 org 선택 에러가 발생합니다. 반드시 `--no-org` 또는 `--org`를 명시하세요.
 
 ---
 
@@ -140,7 +149,10 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 ### 3. 배포
 
 변경 요약을 보여주고 **사용자에게 질문하여 최종 확인** 후 배포합니다.
-`relay publish --json`으로 배포합니다.
+
+배포 명령어는 사용자의 선택(또는 기존 relay.yaml 설정)에 따라:
+- **개인 배포**: `relay publish --no-org --json`
+- **Org 배포**: `relay publish --org {org_slug} --json`
 버전 범프가 필요하면 사용자에게 질문하여 patch/minor/major 중 확인합니다.
 
 ---
