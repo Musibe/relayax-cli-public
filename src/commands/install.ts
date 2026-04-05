@@ -399,7 +399,11 @@ export function registerInstall(program: Command): void {
 
           const setupCmd = resolvedAgent.commands.find((c) => c.name.startsWith('setup-'))
           if (setupCmd && requiresResults.some((r) => r.status === 'missing' || r.status === 'warn')) {
-            console.log(`\n  \x1b[36m👉 설정이 필요합니다: \x1b[1m/${setupCmd.name}\x1b[0m\x1b[36m 을 실행하세요\x1b[0m`)
+            const toolNames = selectedTools
+              ? selectedTools.map((t) => t.name).slice(0, 2).join(' 또는 ')
+              : 'Claude Code'
+            console.log(`\n  \x1b[36m👉 설정이 필요합니다.\x1b[0m`)
+            console.log(`  \x1b[36m   ${toolNames}를 열고 \x1b[1m/${setupCmd.name}\x1b[0m\x1b[36m 을 입력하세요\x1b[0m`)
           }
         }
       } catch (err) {
