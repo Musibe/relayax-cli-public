@@ -10,6 +10,7 @@ import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { checkGitInstalled, buildGitUrl, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
 import { generateSetupCommand } from '../lib/setup-command.js'
+import { suggestRequires, formatSuggestions, mergeIntoRequires } from '../lib/requires-suggest.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -843,6 +844,29 @@ export function registerPublish(program: Command): void {
           yamlData.visibility = config.visibility
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
           console.error(`  → relay.yaml에 visibility: ${config.visibility} 저장됨 (${visLabelMap[config.visibility]})\n`)
+        }
+      }
+
+      // ── Requires 자동 감지 + 제안 ──
+      if (isTTY && !json) {
+        const suggestions = suggestRequires(relayDir, config.requires)
+        if (suggestions.length > 0) {
+          console.error('\n\x1b[33m⚡ requires에 빠진 항목이 감지되었습니다:\x1b[0m')
+          for (const line of formatSuggestions(suggestions)) {
+            console.error(line)
+          }
+          const { confirm } = await import('@inquirer/prompts')
+          const addThem = await confirm({
+            message: 'requires에 추가할까요?',
+            default: true,
+          })
+          if (addThem) {
+            config.requires = mergeIntoRequires(config.requires ?? {}, suggestions)
+            const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
+            yamlData.requires = config.requires
+            fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
+            console.error('  → relay.yaml에 requires 업데이트됨\n')
+          }
         }
       }
 
