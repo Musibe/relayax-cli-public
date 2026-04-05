@@ -207,7 +207,7 @@ export function registerInstall(program: Command): void {
           const detectedValues = new Set(detected.map((t) => t.value))
           const { checkbox } = await import('@inquirer/prompts')
           selectedTools = await checkbox<AITool>({
-            message: '설치할 AI 도구를 선택하��요 (감지된 도구는 자동 선���됨)',
+            message: '설치할 AI 도구를 선택하세요 (감지된 도구는 자동 선택됨)',
             choices: AI_TOOLS.map((t) => ({
               name: t.name,
               value: t,
@@ -234,12 +234,12 @@ export function registerInstall(program: Command): void {
           scope = 'local'
         } else if (interactive) {
           const { select } = await import('@inquirer/prompts')
-          const recommendLabel = defaultScope === 'global' ? '글로벌' : '로���'
+          const recommendLabel = defaultScope === 'global' ? '글로벌' : '로컬'
           scope = await select<'global' | 'local'>({
             message: `설치 범위를 선택하세요 (제작자 권장: ${recommendLabel})`,
             choices: [
-              { name: '글로벌 (~/.relay/agents/) — 모든 프���젝트에서 사��', value: 'global' },
-              { name: '로컬 (./.relay/agents/) — 이 프로젝트에서만 사���', value: 'local' },
+              { name: '글로벌 (~/.relay/agents/) — 모든 프로젝트에서 사용', value: 'global' },
+              { name: '로컬 (./.relay/agents/) — 이 프로젝트에서만 사용', value: 'local' },
             ],
             default: defaultScope,
           })
@@ -372,28 +372,35 @@ export function registerInstall(program: Command): void {
           console.log(`  위치: \x1b[36m${agentDir}\x1b[0m`)
           console.log(`  범위: ${scopeLabel}`)
           console.log(`  파일: ${fileCount}개, symlink: ${deploy.symlinks.length}개`)
-          if (resolvedAgent.commands.length > 0) {
+          const userCommands = resolvedAgent.commands.filter((c) => !c.name.startsWith('setup-'))
+          if (userCommands.length > 0) {
             console.log('\n  포함된 커맨드:')
-            for (const cmd of resolvedAgent.commands) {
+            for (const cmd of userCommands) {
               console.log(`    \x1b[33m/${cmd.name}\x1b[0m - ${cmd.description}`)
             }
           }
 
-          // Usage hint (type-aware)
+          // Usage hint (type-aware, setup command 제외)
           const agentType = resolvedAgent.type
+          const mainCommand = userCommands[0]
           if (agentType === 'passive') {
             console.log(`\n\x1b[33m💡 자동 적용됩니다. 별도 실행 없이 동작합니다.\x1b[0m`)
-          } else if (agentType === 'hybrid' && resolvedAgent.commands && resolvedAgent.commands.length > 0) {
-            console.log(`\n\x1b[33m💡 자동 적용 + \x1b[1m/${resolvedAgent.commands[0].name}\x1b[0m\x1b[33m 으로 추가 기능을 사용할 수 있습니다.\x1b[0m`)
-          } else if (resolvedAgent.commands && resolvedAgent.commands.length > 0) {
-            console.log(`\n\x1b[33m💡 사용법: \x1b[1m/${resolvedAgent.commands[0].name}\x1b[0m`)
+          } else if (agentType === 'hybrid' && mainCommand) {
+            console.log(`\n\x1b[33m💡 자동 적용 + \x1b[1m/${mainCommand.name}\x1b[0m\x1b[33m 으로 추가 기능을 사용할 수 있습니다.\x1b[0m`)
+          } else if (mainCommand) {
+            console.log(`\n\x1b[33m💡 사용법: \x1b[1m/${mainCommand.name}\x1b[0m`)
           } else {
             console.log(`\n\x1b[33m💡 설치 완료! AI 에이전트에서 사용할 수 있습니다.\x1b[0m`)
           }
 
-          // Requires check
+          // Requires check + setup CTA
           const requiresResults = checkRequires(agentDir)
           printRequiresCheck(requiresResults)
+
+          const setupCmd = resolvedAgent.commands.find((c) => c.name.startsWith('setup-'))
+          if (setupCmd && requiresResults.some((r) => r.status === 'missing' || r.status === 'warn')) {
+            console.log(`\n  \x1b[36m👉 설정이 필요합니다: \x1b[1m/${setupCmd.name}\x1b[0m\x1b[36m 을 실행하세요\x1b[0m`)
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

@@ -9,6 +9,7 @@ import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { checkGitInstalled, buildGitUrl, gitPublishInit, gitPublishUpdate } from '../lib/git-operations.js'
+import { generateSetupCommand } from '../lib/setup-command.js'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cliPkg = require('../../package.json') as { version: string }
@@ -903,6 +904,14 @@ export function registerPublish(program: Command): void {
       const entrySlug = config.slug.startsWith('@') ? config.slug.slice(1) : config.slug
       const entryFileName = entrySlug.replace('/', '-') + '.md'
       fs.writeFileSync(path.join(commandsDir, entryFileName), entryContent)
+
+      // Generate setup command if requires exist
+      const mainCmd = detectedCommands.find((c) => !c.name.startsWith('setup-'))
+      const setupContent = generateSetupCommand(config.name, config.requires, mainCmd?.name)
+      if (setupContent) {
+        const setupFileName = `setup-${config.name}.md`
+        fs.writeFileSync(path.join(commandsDir, setupFileName), setupContent)
+      }
 
       // Check git is available
       try {
