@@ -14,6 +14,7 @@ import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { deploySymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
+import { detectGlobalCLIs, detectAgentCLIs, AI_TOOLS, type AITool } from '../lib/ai-tools.js'
 
 export function registerInstall(program: Command): void {
   program
@@ -27,14 +28,6 @@ export function registerInstall(program: Command): void {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = resolveProjectPath(_opts.project)
       const tempDir = makeTempDir()
-
-      // Auto-init: 글로벌 커맨드가 없으면 자동 설치
-      if (!hasGlobalUserCommands()) {
-        if (!json) {
-          console.error('\x1b[33m⚙ 글로벌 커맨드를 자동 설치합니다...\x1b[0m')
-        }
-        installGlobalUserCommands()
-      }
 
       trackCommand('install', { slug: slugInput })
 
@@ -199,10 +192,62 @@ export function registerInstall(program: Command): void {
         // Re-bind as non-optional so TypeScript tracks the narrowing through nested scopes
         let resolvedAgent: AgentRegistryInfo = agent
 
-        // Scope 자동결정: --global/--local 플래그 > recommended_scope > agent_type 기반
-        const scope: 'global' | 'local' = _opts.global ? 'global'
-          : _opts.local ? 'local'
-          : resolvedAgent.recommended_scope ?? (resolvedAgent.type === 'passive' ? 'local' : 'global')
+        const isTTY = Boolean(process.stdin.isTTY)
+        const interactive = isTTY && !json
+        const defaultScope = resolvedAgent.recommended_scope ?? (resolvedAgent.type === 'passive' ? 'local' : 'global')
+
+        // ── Scope 결정: 플래그 > TTY prompt > 자동결정 ──
+        let scope: 'global' | 'local'
+        if (_opts.global) {
+          scope = 'global'
+        } else if (_opts.local) {
+          scope = 'local'
+        } else if (interactive) {
+          const { select } = await import('@inquirer/prompts')
+          scope = await select<'global' | 'local'>({
+            message: '설치 범위를 선택하세요',
+            choices: [
+              { name: '글로벌 (~/.relay/agents/) — 모든 프로젝트에서 사용', value: 'global' },
+              { name: '로컬 (./.relay/agents/) — 이 프로젝트에서만 사용', value: 'local' },
+            ],
+            default: defaultScope,
+          })
+        } else {
+          scope = defaultScope
+        }
+
+        // ── AI tools 선택: 감지된 건 pre-checked, 나머지는 선택 가능 ──
+        let selectedTools: AITool[] | undefined
+        if (interactive) {
+          const detected = scope === 'global'
+            ? detectGlobalCLIs()
+            : detectAgentCLIs(projectPath)
+
+          if (scope === 'global' && !detected.some((t) => t.value === 'claude')) {
+            detected.push({ name: 'Claude Code', value: 'claude', skillsDir: '.claude' })
+          }
+
+          const detectedValues = new Set(detected.map((t) => t.value))
+          const { checkbox } = await import('@inquirer/prompts')
+          selectedTools = await checkbox<AITool>({
+            message: '설치할 AI 도구를 선택하세요 (감지된 도구는 자동 선택됨)',
+            choices: AI_TOOLS.map((t) => ({
+              name: t.name,
+              value: t,
+              checked: detectedValues.has(t.value),
+            })),
+          })
+        }
+
+        // ── init 통합: 선택된 tools에 글로벌 commands 설치 ──
+        if (selectedTools) {
+          installGlobalUserCommands(selectedTools)
+        } else if (!hasGlobalUserCommands()) {
+          if (!json) {
+            console.error('\x1b[33m⚙ 글로벌 커맨드를 자동 설치합니다...\x1b[0m')
+          }
+          installGlobalUserCommands()
+        }
 
         const agentDir = scope === 'global'
           ? path.join(os.homedir(), '.relay', 'agents', parsed.owner, parsed.name)
@@ -257,7 +302,7 @@ export function registerInstall(program: Command): void {
         injectPreambleToAgent(agentDir, slug)
 
         // 5. Deploy symlinks to detected AI tool directories
-        const deploy = await deploySymlinks(agentDir, scope, projectPath)
+        const deploy = await deploySymlinks(agentDir, scope, projectPath, selectedTools)
         for (const w of deploy.warnings) {
           if (!json) console.error(`\x1b[33m${w}\x1b[0m`)
         }

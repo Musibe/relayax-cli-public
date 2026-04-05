@@ -29,34 +29,32 @@ export async function deploySymlinks(
   agentDir: string,
   scope: 'global' | 'local',
   projectPath: string,
+  overrideTools?: AITool[],
 ): Promise<DeployResult> {
   const result: DeployResult = { symlinks: [], warnings: [] }
 
-  // 감지된 AI tool 목록
-  const tools = scope === 'global'
-    ? detectGlobalCLIs()
-    : detectAgentCLIs(projectPath)
+  let tools: AITool[]
+  if (overrideTools) {
+    tools = overrideTools
+  } else {
+    tools = scope === 'global'
+      ? detectGlobalCLIs()
+      : detectAgentCLIs(projectPath)
 
-  // 글로벌: Claude Code를 기본으로 포함
-  if (scope === 'global') {
-    const hasClaudeCode = tools.some((t) => t.value === 'claude')
-    if (!hasClaudeCode) {
+    if (scope === 'global' && !tools.some((t) => t.value === 'claude')) {
       tools.push({ name: 'Claude Code', value: 'claude', skillsDir: '.claude' })
     }
-  }
 
-  // 로컬: AI tool 디렉토리가 없으면 TTY에서 선택
-  if (scope === 'local' && tools.length === 0) {
-    if (process.stdout.isTTY) {
-      const { checkbox } = await import('@inquirer/prompts')
-      const selected = await checkbox<AITool>({
-        message: `Select tools to set up (${AI_TOOLS.length} available)`,
-        choices: AI_TOOLS.map((t) => ({ name: t.name, value: t })),
-      })
-      tools.push(...selected)
-    } else {
-      // Non-TTY (JSON 모드 등): Claude Code 기본
-      tools.push({ name: 'Claude Code', value: 'claude', skillsDir: '.claude' })
+    if (scope === 'local' && tools.length === 0) {
+      if (process.stdout.isTTY) {
+        const { checkbox } = await import('@inquirer/prompts')
+        tools = await checkbox<AITool>({
+          message: `Select tools to set up (${AI_TOOLS.length} available)`,
+          choices: AI_TOOLS.map((t) => ({ name: t.name, value: t })),
+        })
+      } else {
+        tools = [{ name: 'Claude Code', value: 'claude', skillsDir: '.claude' }]
+      }
     }
   }
 

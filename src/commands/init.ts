@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { Command } from 'commander'
-import { detectAgentCLIs, detectGlobalCLIs, AI_TOOLS } from '../lib/ai-tools.js'
+import { detectAgentCLIs, detectGlobalCLIs, AI_TOOLS, type AITool } from '../lib/ai-tools.js'
 import { resolveProjectPath } from '../lib/paths.js'
 import {
   USER_COMMANDS,
@@ -49,8 +49,8 @@ const LEGACY_COMMANDS: Record<string, string> = {
   'relay-publish': 'relay publish --patch (CLI) 또는 /relay-create',
 }
 
-export function installGlobalUserCommands(): { installed: boolean; commands: string[]; tools: string[]; removed: string[] } {
-  const globalCLIs = detectGlobalCLIs()
+export function installGlobalUserCommands(overrideTools?: AITool[]): { installed: boolean; commands: string[]; tools: string[]; removed: string[] } {
+  const globalCLIs = overrideTools ?? detectGlobalCLIs()
   const currentIds = new Set(USER_COMMANDS.map((c) => c.id))
   const commands: string[] = []
   const tools: string[] = []
@@ -90,7 +90,14 @@ export function installGlobalUserCommands(): { installed: boolean; commands: str
 /**
  * 글로벌 User 커맨드가 이미 설치되어 있는지 확인한다.
  */
-export function hasGlobalUserCommands(): boolean {
+export function hasGlobalUserCommands(overrideTools?: AITool[]): boolean {
+  if (overrideTools) {
+    return overrideTools.every((tool) =>
+      USER_COMMANDS.every((cmd) =>
+        fs.existsSync(getGlobalCommandPathForTool(tool.skillsDir, cmd.id))
+      )
+    )
+  }
   return USER_COMMANDS.every((cmd) =>
     fs.existsSync(getGlobalCommandPath(cmd.id))
   )
