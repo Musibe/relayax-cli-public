@@ -14,7 +14,7 @@ import { resolveProjectPath } from '../lib/paths.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { deploySymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
-import { detectGlobalCLIs, detectAgentCLIs, AI_TOOLS, type AITool } from '../lib/ai-tools.js'
+import { detectGlobalCLIs, AI_TOOLS, type AITool } from '../lib/ai-tools.js'
 
 export function registerInstall(program: Command): void {
   program
@@ -196,41 +196,18 @@ export function registerInstall(program: Command): void {
         const interactive = isTTY && !json
         const defaultScope = resolvedAgent.recommended_scope ?? (resolvedAgent.type === 'passive' ? 'local' : 'global')
 
-        // ── Scope 결정: 플래그 > TTY prompt > 자동결정 ──
-        let scope: 'global' | 'local'
-        if (_opts.global) {
-          scope = 'global'
-        } else if (_opts.local) {
-          scope = 'local'
-        } else if (interactive) {
-          const { select } = await import('@inquirer/prompts')
-          scope = await select<'global' | 'local'>({
-            message: '설치 범위를 선택하세요',
-            choices: [
-              { name: '글로벌 (~/.relay/agents/) — 모든 프로젝트에서 사용', value: 'global' },
-              { name: '로컬 (./.relay/agents/) — 이 프로젝트에서만 사용', value: 'local' },
-            ],
-            default: defaultScope,
-          })
-        } else {
-          scope = defaultScope
-        }
-
-        // ── AI tools 선택: 감지된 건 pre-checked, 나머지는 선택 가능 ──
+        // ── 1. AI tools 선택 (scope 무관, 항상 홈 디렉토리에서 감지) ──
         let selectedTools: AITool[] | undefined
         if (interactive) {
-          const detected = scope === 'global'
-            ? detectGlobalCLIs()
-            : detectAgentCLIs(projectPath)
-
-          if (scope === 'global' && !detected.some((t) => t.value === 'claude')) {
+          const detected = detectGlobalCLIs()
+          if (!detected.some((t) => t.value === 'claude')) {
             detected.push({ name: 'Claude Code', value: 'claude', skillsDir: '.claude' })
           }
 
           const detectedValues = new Set(detected.map((t) => t.value))
           const { checkbox } = await import('@inquirer/prompts')
           selectedTools = await checkbox<AITool>({
-            message: '설치할 AI 도구를 선택하세요 (감지된 도구는 자동 선택됨)',
+            message: '설치할 AI 도구를 선택하��요 (감지된 도구는 자동 선���됨)',
             choices: AI_TOOLS.map((t) => ({
               name: t.name,
               value: t,
@@ -239,7 +216,7 @@ export function registerInstall(program: Command): void {
           })
         }
 
-        // ── init 통합: 선택된 tools에 글로벌 commands 설치 ──
+        // ── 2. 글로벌 slash commands 설치/업데이트 ──
         if (selectedTools) {
           installGlobalUserCommands(selectedTools)
         } else if (!hasGlobalUserCommands()) {
@@ -247,6 +224,27 @@ export function registerInstall(program: Command): void {
             console.error('\x1b[33m⚙ 글로벌 커맨드를 자동 설치합니다...\x1b[0m')
           }
           installGlobalUserCommands()
+        }
+
+        // ── 3. Scope 결정: 플래그 > TTY prompt > 자동결정 ──
+        let scope: 'global' | 'local'
+        if (_opts.global) {
+          scope = 'global'
+        } else if (_opts.local) {
+          scope = 'local'
+        } else if (interactive) {
+          const { select } = await import('@inquirer/prompts')
+          const recommendLabel = defaultScope === 'global' ? '글로벌' : '로���'
+          scope = await select<'global' | 'local'>({
+            message: `설치 범위를 선택하세요 (제작자 권장: ${recommendLabel})`,
+            choices: [
+              { name: '글로벌 (~/.relay/agents/) — 모든 프���젝트에서 사��', value: 'global' },
+              { name: '로컬 (./.relay/agents/) — 이 프로젝트에서만 사���', value: 'local' },
+            ],
+            default: defaultScope,
+          })
+        } else {
+          scope = defaultScope
         }
 
         const agentDir = scope === 'global'
