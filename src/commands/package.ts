@@ -540,7 +540,8 @@ export function registerPackage(program: Command): void {
       // ─── 재패키징 (contents 매니페스트 기반 동기화) ───
       const yamlContent = fs.readFileSync(relayYamlPath, 'utf-8')
       const config = yaml.load(yamlContent) as Record<string, unknown>
-      const contents = (config.contents as ContentEntry[] | undefined) ?? []
+      const rawContents = config.contents
+      const contents: ContentEntry[] = Array.isArray(rawContents) ? rawContents : []
 
       // 기존 source 필드 → contents 마이그레이션 안내
       if (!config.contents && config.source) {
