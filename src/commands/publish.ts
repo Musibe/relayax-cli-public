@@ -846,6 +846,20 @@ export function registerPublish(program: Command): void {
         }
       }
 
+      // Generate setup command BEFORE detectCommands so it's included in metadata
+      {
+        const commandsDir = path.join(relayDir, 'commands')
+        if (!fs.existsSync(commandsDir)) {
+          fs.mkdirSync(commandsDir, { recursive: true })
+        }
+        const slugName = config.slug.split('/').pop() ?? config.name
+        const setupContent = generateSetupCommand(config.name, config.requires, slugName)
+        if (setupContent) {
+          const setupFileName = `setup-${slugName}.md`
+          fs.writeFileSync(path.join(commandsDir, setupFileName), setupContent)
+        }
+      }
+
       const detectedCommands = detectCommands(relayDir)
       const components: Components = {
         agents: countDir(relayDir, 'agents'),
@@ -904,14 +918,6 @@ export function registerPublish(program: Command): void {
       const entrySlug = config.slug.startsWith('@') ? config.slug.slice(1) : config.slug
       const entryFileName = entrySlug.replace('/', '-') + '.md'
       fs.writeFileSync(path.join(commandsDir, entryFileName), entryContent)
-
-      // Generate setup command if requires exist
-      const mainCmd = detectedCommands.find((c) => !c.name.startsWith('setup-'))
-      const setupContent = generateSetupCommand(config.name, config.requires, mainCmd?.name)
-      if (setupContent) {
-        const setupFileName = `setup-${config.name}.md`
-        fs.writeFileSync(path.join(commandsDir, setupFileName), setupContent)
-      }
 
       // Check git is available
       try {
