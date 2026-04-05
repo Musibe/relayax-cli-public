@@ -66,17 +66,6 @@ interface NewItemEntry {
   relativePath: string
 }
 
-interface ContentsPackageResult {
-  diff: ContentDiffEntry[]
-  new_items: NewItemEntry[]
-  synced: boolean
-  summary: {
-    modified: number
-    unchanged: number
-    source_missing: number
-    new_available: number
-  }
-}
 
 // ─── Helpers ───
 
@@ -295,30 +284,68 @@ export function syncContentsToRelay(
   contentsDiff: ContentDiffEntry[],
   relayDir: string,
   projectPath: string,
-): void {
-  for (const diffEntry of contentsDiff) {
-    if (diffEntry.status !== 'modified') continue
+): { removed: string[] } {
+  const removed: string[] = []
 
+  for (const diffEntry of contentsDiff) {
     const content = contents.find((c) => c.name === diffEntry.name && c.type === diffEntry.type)
+
+    // source_missing: 소스에서 삭제됨 → .relay/에서도 제거
+    if (diffEntry.status === 'source_missing') {
+      const relaySubPath = content ? deriveRelaySubPath(content) : `${diffEntry.type}s/${diffEntry.name}`
+      const relayTarget = path.join(relayDir, relaySubPath)
+      if (fs.existsSync(relayTarget)) {
+        fs.rmSync(relayTarget, { recursive: true, force: true })
+        removed.push(relaySubPath)
+      }
+      continue
+    }
+
+    if (diffEntry.status !== 'modified') continue
     if (!content) continue
 
     const absFrom = resolveFromPath(getFromPath(content), projectPath)
     const relaySubPath = deriveRelaySubPath(content)
     const relayTarget = path.join(relayDir, relaySubPath)
 
-    // 단일 파일인 경우 직접 복사 (디렉토리 기반 diff/sync 불필요)
+    // 단일 파일인 경우 직접 복사
     if (fs.existsSync(absFrom) && fs.statSync(absFrom).isFile()) {
       fs.mkdirSync(path.dirname(relayTarget), { recursive: true })
       fs.copyFileSync(absFrom, relayTarget)
       continue
     }
 
-    // 디렉토리인 경우 diff 기반 동기화
+    // 디렉토리인 경우 diff 기반 동기화 (deleted 포함)
     const sourceFiles = scanPath(absFrom)
     const relayFiles = scanPath(relayTarget)
     const fileDiff = computeDiff(sourceFiles, relayFiles)
     syncToRelay(absFrom, relayTarget, fileDiff)
   }
+
+  return { removed }
+}
+
+/**
+ * .relay/ 내에 있지만 contents 매니페스트에 없는 orphan 항목을 찾는다.
+ */
+export function findOrphanItems(contents: ContentEntry[], relayDir: string): string[] {
+  const contentPaths = new Set(contents.map((c) => deriveRelaySubPath(c)))
+  const orphans: string[] = []
+
+  for (const dir of SYNC_DIRS) {
+    const fullDir = path.join(relayDir, dir)
+    if (!fs.existsSync(fullDir)) continue
+
+    for (const entry of fs.readdirSync(fullDir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue
+      const relPath = `${dir}/${entry.name}`
+      if (!contentPaths.has(relPath)) {
+        orphans.push(relPath)
+      }
+    }
+  }
+
+  return orphans
 }
 
 // ─── Global Agent Home ───
@@ -574,24 +601,35 @@ export function registerPackage(program: Command): void {
 
       // contents 기반 diff 계산
       const { diff: contentsDiff, newItems } = computeContentsDiff(contents, relayDir, projectPath)
+      const orphans = findOrphanItems(contents, relayDir)
 
       const summary = {
         modified: contentsDiff.filter((d) => d.status === 'modified').length,
         unchanged: contentsDiff.filter((d) => d.status === 'unchanged').length,
         source_missing: contentsDiff.filter((d) => d.status === 'source_missing').length,
         new_available: newItems.length,
+        orphaned: orphans.length,
       }
 
-      const hasChanges = summary.modified > 0
+      const hasChanges = summary.modified > 0 || summary.source_missing > 0 || summary.orphaned > 0
 
-      // --sync: contents 단위 동기화
+      // --sync: contents 단위 동기화 + orphan 정리
       if (opts.sync && hasChanges) {
-        syncContentsToRelay(contents, contentsDiff, relayDir, projectPath)
+        const { removed } = syncContentsToRelay(contents, contentsDiff, relayDir, projectPath)
+        // orphan 항목 삭제
+        for (const orphan of orphans) {
+          const orphanPath = path.join(relayDir, orphan)
+          if (fs.existsSync(orphanPath)) {
+            fs.rmSync(orphanPath, { recursive: true, force: true })
+            removed.push(orphan)
+          }
+        }
       }
 
-      const result: ContentsPackageResult = {
+      const result = {
         diff: contentsDiff.filter((d) => d.status !== 'unchanged'),
         new_items: newItems,
+        orphans,
         synced: opts.sync === true && hasChanges,
         summary,
       }
@@ -616,6 +654,13 @@ export function registerPackage(program: Command): void {
           }
         }
 
+        if (orphans.length > 0) {
+          console.error('\n  \x1b[33m.relay/에만 존재 (소스에서 삭제됨):\x1b[0m')
+          for (const orphan of orphans) {
+            console.error(`    \x1b[31m✗ ${orphan}\x1b[0m`)
+          }
+        }
+
         if (newItems.length > 0) {
           console.error('\n  새로 발견된 콘텐츠:')
           for (const item of newItems) {
@@ -624,7 +669,7 @@ export function registerPackage(program: Command): void {
         }
 
         console.error('')
-        console.error(`  합계: 변경 ${summary.modified}, 유지 ${summary.unchanged}, 원본 없음 ${summary.source_missing}, 신규 ${summary.new_available}`)
+        console.error(`  합계: 변경 ${summary.modified}, 유지 ${summary.unchanged}, 원본 없음 ${summary.source_missing}, 신규 ${summary.new_available}, 고아 ${summary.orphaned}`)
 
         if (opts.sync) {
           console.error('\n✓ .relay/에 반영 완료')
