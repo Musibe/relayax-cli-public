@@ -42,7 +42,7 @@ export function generatePreamble(slug: string, agentDir: string): string {
 \`\`\`
 
 If output shows \`CLI_UPGRADE_AVAILABLE <old> <new>\`: tell user "relay v{new} available. Run: npm update -g relayax-cli"
-If output shows \`AGENT_UPGRADE_AVAILABLE\`: tell user "${slug} v{new} available (by @{author}). Run: relay update ${slug}"
+If output shows \`AGENT_UPGRADE_AVAILABLE\`: ask (use AskUserQuestion tool) user "${slug} v{new} is available (by @{author}). Update now? (relay update ${slug})". If user agrees, run \`relay update ${slug}\` before proceeding.
 ${PREAMBLE_END}`
 }
 
