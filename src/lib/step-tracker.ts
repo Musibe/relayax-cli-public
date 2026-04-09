@@ -5,8 +5,8 @@ import { getDeviceHash } from './device-hash.js'
 const pkg = require('../../package.json') as { version: string }
 
 /**
- * CLI 명령 실행을 서버에 기록한다 (fire-and-forget).
- * device_hash 기준으로 사용자 여정(login → create → publish)을 추적.
+ * Record CLI command execution to server (fire-and-forget).
+ * Track user journey (login → create → publish) by device_hash.
  */
 export function trackCommand(
   command: string,

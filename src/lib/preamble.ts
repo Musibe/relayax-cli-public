@@ -8,8 +8,8 @@ const LEGACY_PREAMBLE_START = '<!-- RELAY_PREAMBLE_START - DO NOT EDIT -->'
 const LEGACY_PREAMBLE_END = '<!-- RELAY_PREAMBLE_END -->'
 
 /**
- * bin/anpm-preamble.sh 스크립트를 생성한다.
- * bash 실행 가능 환경을 전제로, anpm CLI를 직접 호출한다.
+ * Generate bin/anpm-preamble.sh script.
+ * Assumes bash is available, calls anpm CLI directly.
  */
 export function generatePreambleScript(slug: string, _apiUrl: string): string {
   return `#!/usr/bin/env bash
@@ -32,8 +32,8 @@ echo "ANPM_READY: ${slug}"
 }
 
 /**
- * SKILL.md / command에 삽입할 preamble 마크다운.
- * agentDir: 설치된 에이전트의 절대 경로 (install 시점에 결정)
+ * Preamble markdown to inject into SKILL.md / commands.
+ * agentDir: absolute path to the installed agent (determined at install time)
  */
 export function generatePreamble(slug: string, agentDir: string): string {
   const scriptPath = path.join(agentDir, 'bin', 'anpm-preamble.sh')
@@ -50,7 +50,7 @@ ${PREAMBLE_END}`
 }
 
 /**
- * agentDir에 bin/anpm-preamble.sh를 생성한다.
+ * Create bin/anpm-preamble.sh in agentDir.
  */
 export function generatePreambleBin(agentDir: string, slug: string, apiUrl: string): void {
   const binDir = path.join(agentDir, 'bin')
@@ -63,14 +63,14 @@ export function generatePreambleBin(agentDir: string, slug: string, apiUrl: stri
 }
 
 /**
- * frontmatter(---...---) 뒤에 preamble을 삽입한다.
+ * Insert preamble after frontmatter (---...---) section.
  */
 
 export function injectPreamble(filePath: string, slug: string, agentDir: string): void {
   const content = fs.readFileSync(filePath, 'utf-8')
   const preamble = generatePreamble(slug, agentDir)
 
-  // 기존 preamble 제거 (새 마커 + 레거시 마커 모두 처리)
+  // Remove existing preamble (both new and legacy markers)
   let cleaned = content
   for (const [start, end] of [[PREAMBLE_START, PREAMBLE_END], [LEGACY_PREAMBLE_START, LEGACY_PREAMBLE_END]]) {
     const startIdx = cleaned.indexOf(start)
@@ -83,7 +83,7 @@ export function injectPreamble(filePath: string, slug: string, agentDir: string)
     }
   }
 
-  // frontmatter 뒤에 삽입
+  // Insert after frontmatter
   const fmMatch = cleaned.match(/^---\n[\s\S]*?\n---\n/)
   if (fmMatch) {
     const fmEnd = fmMatch[0].length
@@ -99,12 +99,12 @@ export function injectPreamble(filePath: string, slug: string, agentDir: string)
 }
 
 /**
- * 에이전트의 사용자 진입점 파일에 preamble을 주입한다.
+ * Inject preamble into the agent's user entry point files.
  */
 export function injectPreambleToAgent(agentDir: string, slug: string): number {
   let count = 0
 
-  // 1. user-invocable 서브 스킬 SKILL.md
+  // 1. user-invocable sub-skill SKILL.md
   const skillsDir = path.join(agentDir, 'skills')
   if (fs.existsSync(skillsDir)) {
     function walkSkills(dir: string) {

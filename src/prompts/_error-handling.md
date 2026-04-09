@@ -1,38 +1,38 @@
-### 에러 처리 가이드
+### Error Handling Guide
 
-CLI 명령 실행 후 JSON 에러가 반환되면 아래 기준에 따라 처리합니다.
-**원칙: "되돌릴 수 없는 영향이 있는가?"로 판단합니다.**
+When a CLI command returns a JSON error, handle it according to the following rules.
+**Principle: "Does this have irreversible consequences?"**
 
-#### 1. 자동 해결 (사용자에게 물어보지 않음)
-되돌릴 수 있고, 부작용 없는 에러:
+#### 1. Auto-resolve (don't ask the user)
+Reversible errors with no side effects:
 
-| 에러 코드 | 행동 |
+| Error Code | Action |
 |-----------|------|
-| `LOGIN_REQUIRED` / `NO_TOKEN` | `anpm login` 실행 (timeout 300초, 브라우저 자동 열림) → 성공 후 원래 명령 재시도 |
-| `NOT_INITIALIZED` | `anpm init --all --json` 실행 → 원래 명령 재시도 |
-| `FETCH_FAILED` | 3초 대기 후 원래 명령 재시도 (최대 2회). 2회 실패 시 사용자에게 안내 |
+| `LOGIN_REQUIRED` / `NO_TOKEN` | Run `anpm login` (timeout 300s, browser opens automatically) → retry the original command on success |
+| `NOT_INITIALIZED` | Run `anpm init --all --json` → retry the original command |
+| `FETCH_FAILED` | Wait 3 seconds and retry the original command (max 2 retries). After 2 failures, inform the user |
 
-#### 2. 사용자에게 선택지 제시 (사용자 질문 도구)
-`options` 필드가 있는 에러:
+#### 2. Present choices to the user (user question tool)
+Errors with an `options` field:
 
-| 에러 코드 | 행동 |
+| Error Code | Action |
 |-----------|------|
-| `MISSING_VISIBILITY` | options의 label을 선택지로 사용자 질문 도구 호출 |
-| `MISSING_FIELD` | fix 안내 + 사용자에게 값 입력 요청 |
-| `MISSING_TOOLS` | options의 감지된 도구 목록을 선택지로 사용자 질문 도구 호출 |
-| `MISSING_SPACE` | options의 Space 목록을 선택지로 사용자 질문 도구 호출 |
+| `MISSING_VISIBILITY` | Use options labels as choices via the user question tool |
+| `MISSING_FIELD` | Show fix hint + ask user for input |
+| `MISSING_TOOLS` | Show detected tools list as choices via the user question tool |
+| `MISSING_SPACE` | Show Space list as choices via the user question tool |
 
-사용자가 선택하면, 선택된 값을 CLI 플래그에 반영하여 명령을 재호출합니다.
+When the user selects, apply the chosen value to the CLI flags and re-run the command.
 
-#### 3. 사용자에게 안내 (되돌릴 수 없는 에러)
-구매, 접근 권한, 보안 관련:
+#### 3. Inform the user (irreversible errors)
+Purchase, access, and security related:
 
-| 에러 코드 | 행동 |
+| Error Code | Action |
 |-----------|------|
-| `GATED_ACCESS_REQUIRED` | purchase_info의 message/url 표시 → "접근 코드가 있으신가요?" 사용자 질문 도구 호출 |
-| `SPACE_ONLY` | Space 가입 필요 안내 → "초대 코드가 있으신가요?" 사용자 질문 도구 호출 |
-| `APPROVAL_REQUIRED` | 승인 대기 안내 |
-| `NO_ACCESS` | 접근 방법 안내 |
+| `GATED_ACCESS_REQUIRED` | Show purchase_info message/url → ask "Do you have an access code?" via user question tool |
+| `SPACE_ONLY` | Inform about Space membership requirement → ask "Do you have an invite code?" via user question tool |
+| `APPROVAL_REQUIRED` | Inform about pending approval |
+| `NO_ACCESS` | Guide on how to get access |
 
-#### 4. 그 외 에러
-`fix` 필드의 메시지를 사용자에게 전달하고, 필요하면 다음 행동을 제안합니다.
+#### 4. Other errors
+Show the `fix` field message to the user and suggest next steps if needed.

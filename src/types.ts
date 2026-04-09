@@ -5,25 +5,25 @@ export interface ContactItem {
 }
 
 export interface InstalledAgent {
-  /** agent UUID — 설치 카운트/핑 등 서버 통신에 사용 */
+  /** agent UUID — used for server communication (install count, pings) */
   agent_id?: string;
   version: string;
   installed_at: string;
   files: string[];
   type?: 'agent' | 'system';
-  /** Org 소속 에이전트인 경우 Org slug */
+  /** Org slug if agent belongs to an org */
   org_slug?: string;
-  /** 배치 범위 — 에이전트가 relay deploy-record로 기록 */
+  /** Deploy scope — recorded via relay deploy-record */
   deploy_scope?: 'global' | 'local';
-  /** 배치된 파일 절대경로 목록 — 에이전트가 relay deploy-record로 기록 (legacy) */
+  /** Absolute paths of deployed files — recorded via relay deploy-record (legacy) */
   deployed_files?: string[];
-  /** symlink 절대경로 목록 — relay install이 직접 기록 */
+  /** Absolute symlink paths — recorded by relay install */
   deployed_symlinks?: string[];
-  /** 설치 소스: registry (기본), local:<path>, git:<url>#<ref>, link:<path>, adopted:<path> */
+  /** Install source: registry (default), local:<path>, git:<url>#<ref>, link:<path>, adopted:<path> */
   source?: string;
 }
 
-/** 키는 scoped slug 포맷: "@owner/name" */
+/** Key is scoped slug format: "@owner/name" */
 export interface InstalledRegistry {
   [scopedSlug: string]: InstalledAgent;
 }
@@ -31,7 +31,7 @@ export interface InstalledRegistry {
 export interface AgentRegistryInfo {
   /** agent UUID */
   id: string;
-  /** scoped slug 포맷: "@owner/name" */
+  /** Scoped slug format: "@owner/name" */
   slug: string;
   name: string;
   description?: string;
@@ -40,7 +40,7 @@ export interface AgentRegistryInfo {
   git_url?: string;
   commands: { name: string; description: string }[];
   type?: 'command' | 'passive' | 'hybrid';
-  /** 에이전트 제작자가 권장하는 배치 범위 */
+  /** Recommended install scope by the agent author */
   recommended_scope?: 'global' | 'local';
   agent_details?: { name: string; description: string; uses: string[] }[];
   skill_details?: { name: string; description: string; uses: string[] }[];
@@ -102,7 +102,7 @@ export interface DeployRegistry {
 }
 
 export interface SearchResult {
-  /** scoped slug 포맷: "@owner/name" */
+  /** Scoped slug format: "@owner/name" */
   slug: string;
   name: string;
   description: string;

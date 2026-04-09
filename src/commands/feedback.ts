@@ -5,16 +5,16 @@ import { getDeviceHash } from '../lib/device-hash.js'
 export function registerFeedback(program: Command): void {
   program
     .command('feedback <message>')
-    .description('피드백을 전송합니다')
+    .description('Send feedback')
     .action(async (message: string) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const deviceHash = getDeviceHash()
 
-      // 설치된 에이전트 slug 목록
+      // Installed agent slug list
       const installed = loadInstalled()
       const installedAgents = Object.keys(installed)
 
-      // 로그인 사용자 정보 (optional)
+      // Logged-in user info (optional)
       let userId: string | undefined
       let username: string | undefined
       const token = await getValidToken()
@@ -50,20 +50,20 @@ export function registerFeedback(program: Command): void {
 
         if (!res.ok) {
           const body = await res.text().catch(() => '')
-          throw new Error(`서버 응답 오류 (${res.status}): ${body}`)
+          throw new Error(`Server error (${res.status}): ${body}`)
         }
 
         if (json) {
-          console.log(JSON.stringify({ status: 'ok', message: '피드백이 전송되었습니다' }))
+          console.log(JSON.stringify({ status: 'ok', message: 'Feedback sent successfully' }))
         } else {
-          console.log('\x1b[32m✓ 피드백이 전송되었습니다. 감사합니다!\x1b[0m')
+          console.log('\x1b[32m✓ Feedback sent. Thank you!\x1b[0m')
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err)
         if (json) {
           console.error(JSON.stringify({ error: 'FEEDBACK_FAILED', message: errMsg }))
         } else {
-          console.error(`\x1b[31m피드백 전송 실패: ${errMsg}\x1b[0m`)
+          console.error(`\x1b[31mFailed to send feedback: ${errMsg}\x1b[0m`)
         }
         process.exit(1)
       }

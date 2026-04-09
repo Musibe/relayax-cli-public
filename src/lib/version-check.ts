@@ -44,7 +44,7 @@ export async function checkAgentVersion(
     const entry = installed[slug]
     if (!entry?.version) return null
 
-    // system 타입(relay-core)은 CLI 버전 체크로 대체
+    // system type (relay-core) uses CLI version check instead
     if (entry.type === 'system') {
       return null
     }

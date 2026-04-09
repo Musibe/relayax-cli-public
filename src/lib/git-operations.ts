@@ -10,7 +10,7 @@ export function checkGitInstalled(): void {
     execFileSync('git', ['--version'], { stdio: 'pipe' })
   } catch {
     throw new Error(
-      'git이 설치되어 있지 않습니다.\n' +
+      'git is not installed.\n' +
       '  macOS: xcode-select --install\n' +
       '  Ubuntu/Debian: sudo apt install git\n' +
       '  Windows: https://git-scm.com/download/win'
@@ -20,8 +20,8 @@ export function checkGitInstalled(): void {
 
 // ─── Core Git Operations ───
 
-// Credential helper/askpass를 비활성화하여 URL에 포함된 토큰만 사용.
-// Cursor/VSCode가 GIT_ASKPASS를 주입하면 relay 토큰 대신 IDE 인증을 시도하여 실패함.
+// Disable credential helper/askpass so only URL-embedded tokens are used.
+// Cursor/VSCode inject GIT_ASKPASS which causes auth failures with relay tokens.
 const GIT_ENV: NodeJS.ProcessEnv = {
   ...process.env,
   GIT_TERMINAL_PROMPT: '0',

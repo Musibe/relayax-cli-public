@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * postinstall — npm install -g anpm-io 후 자동 실행
+ * postinstall — runs automatically after npm install -g anpm-io
  *
- * 1. 감지된 에이전트 CLI에 글로벌 슬래시 커맨드 설치
- * 2. 설치 결과 안내 메시지 출력
+ * 1. Install global slash commands to detected agent CLIs
+ * 2. Print installation summary
  */
 
 import { installGlobalUserCommands } from './commands/init.js'
@@ -14,29 +14,29 @@ try {
   const result = installGlobalUserCommands()
 
   console.log('')
-  console.log('  \x1b[32m✓ anpm 설치 완료!\x1b[0m')
+  console.log('  \x1b[32m✓ anpm installed!\x1b[0m')
   console.log('')
 
   if (result.tools.length > 0) {
-    console.log(`  \x1b[36m슬래시 커맨드 설치됨:\x1b[0m ${result.tools.join(', ')}`)
+    console.log(`  \x1b[36mSlash commands installed:\x1b[0m ${result.tools.join(', ')}`)
     console.log('')
-    console.log('  사용 가능한 커맨드:')
-    console.log('    /relay-explore     에이전트 탐색 & 추천')
-    console.log('    /relay-create      에이전트 생성 & 배포')
-    console.log('    /relay-status      설치 현황 & Organization')
-    console.log('    /relay-uninstall   에이전트 삭제')
+    console.log('  Available commands:')
+    console.log('    /relay-explore     Discover & recommend agents')
+    console.log('    /relay-create      Create & publish agents')
+    console.log('    /relay-status      Installation status & Organizations')
+    console.log('    /relay-uninstall   Remove agents')
   } else {
-    console.log('  \x1b[33m에이전트 CLI가 감지되지 않았습니다.\x1b[0m')
-    console.log('  Claude Code, Cursor 등 설치 후 \x1b[36manpm init\x1b[0m을 실행하세요.')
+    console.log('  \x1b[33mNo agent CLI detected.\x1b[0m')
+    console.log('  Install Claude Code, Cursor, etc. then run \x1b[36manpm init\x1b[0m.')
   }
 
   console.log('')
-  console.log('  \x1b[2m시작하기: anpm login\x1b[0m')
+  console.log('  \x1b[2mGet started: anpm login\x1b[0m')
   console.log('')
 } catch {
-  // postinstall 실패해도 CLI 설치는 성공해야 함
+  // CLI install should succeed even if postinstall fails
   console.log('')
-  console.log('  \x1b[32m✓ anpm 설치 완료!\x1b[0m')
-  console.log('  \x1b[2m시작하기: anpm login\x1b[0m')
+  console.log('  \x1b[32m✓ anpm installed!\x1b[0m')
+  console.log('  \x1b[2mGet started: anpm login\x1b[0m')
   console.log('')
 }

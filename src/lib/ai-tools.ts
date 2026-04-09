@@ -9,8 +9,8 @@ export interface AITool {
 }
 
 /**
- * Agent Skills 표준을 지원하는 에이전트 CLI 목록.
- * @fission-ai/openspec의 AI_TOOLS에서 차용.
+ * List of agent CLIs that support the Agent Skills standard.
+ * Derived from @fission-ai/openspec's AI_TOOLS.
  */
 export const AI_TOOLS: AITool[] = [
   { name: 'Amazon Q Developer', value: 'amazon-q', skillsDir: '.amazonq' },
@@ -42,7 +42,7 @@ export const AI_TOOLS: AITool[] = [
 ]
 
 /**
- * 프로젝트 디렉토리에서 에이전트 CLI 디렉토리를 감지한다.
+ * Detect agent CLI directories in a project directory.
  */
 export function detectAgentCLIs(projectPath: string): AITool[] {
   return AI_TOOLS.filter((tool) =>
@@ -51,8 +51,8 @@ export function detectAgentCLIs(projectPath: string): AITool[] {
 }
 
 /**
- * 홈 디렉토리에서 글로벌 에이전트 CLI 디렉토리를 감지한다.
- * ~/{skillsDir}/ 가 존재하는 CLI를 반환.
+ * Detect global agent CLI directories in the home directory.
+ * Returns CLIs where ~/{skillsDir}/ exists.
  */
 export function detectGlobalCLIs(home?: string): AITool[] {
   const homeDir = home ?? os.homedir()
@@ -68,7 +68,7 @@ export type ContentType = 'skill' | 'agent' | 'command' | 'rule'
 export interface ContentItem {
   name: string
   type: ContentType
-  /** 소스 디렉토리 기준 상대 경로 (예: skills/code-review) */
+  /** Relative path from source directory (e.g., skills/code-review) */
   relativePath: string
 }
 
@@ -82,8 +82,8 @@ const CONTENT_DIRS: { dir: string; type: ContentType }[] = [
 const EXCLUDE_SUBDIRS = ['relay']
 
 /**
- * 소스 디렉토리(basePath) 안의 skills/, agents/, commands/, rules/에서
- * 개별 항목을 스캔하여 반환한다.
+ * Scan skills/, agents/, commands/, rules/ inside the source directory (basePath)
+ * and return individual items.
  */
 function scanItemsIn(basePath: string): ContentItem[] {
   const items: ContentItem[] = []
@@ -96,7 +96,7 @@ function scanItemsIn(basePath: string): ContentItem[] {
       if (entry.isDirectory() && EXCLUDE_SUBDIRS.includes(entry.name)) continue
 
       items.push({
-        name: entry.name.replace(/\.\w+$/, ''), // 파일이면 확장자 제거
+        name: entry.name.replace(/\.\w+$/, ''), // strip extension for files
         type,
         relativePath: path.join(dir, entry.name),
       })
@@ -106,7 +106,7 @@ function scanItemsIn(basePath: string): ContentItem[] {
 }
 
 /**
- * 프로젝트 로컬 소스의 개별 스킬/에이전트/커맨드/룰 항목을 반환한다.
+ * Return individual skill/agent/command/rule items from a project local source.
  */
 export function scanLocalItems(projectPath: string, tool: AITool): ContentItem[] {
   const basePath = path.join(projectPath, tool.skillsDir)
@@ -114,7 +114,7 @@ export function scanLocalItems(projectPath: string, tool: AITool): ContentItem[]
 }
 
 /**
- * 글로벌 홈 디렉토리 소스의 개별 스킬/에이전트/커맨드/룰 항목을 반환한다.
+ * Return individual skill/agent/command/rule items from the global home directory source.
  */
 export function scanGlobalItems(tool: AITool, home?: string): ContentItem[] {
   const basePath = path.join(home ?? os.homedir(), tool.skillsDir)

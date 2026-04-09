@@ -9,13 +9,13 @@ function interpolate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
-// ─── 공유 조각 ───
+// ─── Shared fragments ───
 export const ERROR_HANDLING_GUIDE = readPrompt('_error-handling.md')
 
 const fragments: Record<string, string> = {
   ERROR_HANDLING_GUIDE,
 }
 
-// ─── 프롬프트 ───
+// ─── Prompts ───
 export const EXPLORE_PROMPT = interpolate(readPrompt('explore.md'), fragments)
 export const CREATE_PROMPT = interpolate(readPrompt('create.md'), fragments)

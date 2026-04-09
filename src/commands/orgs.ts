@@ -15,7 +15,7 @@ export async function fetchMyOrgs(token: string): Promise<OrgInfo[]> {
     signal: AbortSignal.timeout(8000),
   })
   if (!res.ok) {
-    throw new Error(`Organization 목록 조회 실패 (${res.status})`)
+    throw new Error(`Failed to fetch organizations (${res.status})`)
   }
   return (await res.json()) as OrgInfo[]
 }
@@ -23,21 +23,21 @@ export async function fetchMyOrgs(token: string): Promise<OrgInfo[]> {
 export function registerOrgs(program: Command): void {
   const orgsCmd = program
     .command('orgs')
-    .description('Organization 관련 명령어')
+    .description('Organization commands')
 
   orgsCmd
     .command('list')
-    .description('내 Organization 목록을 확인합니다')
+    .description('List my organizations')
     .action(async () => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       const token = await getValidToken()
       if (!token) {
         if (json) {
-          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'anpm login 실행 후 재시도하세요.' }))
+          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: 'Authentication required.', fix: 'Run anpm login and try again.' }))
         } else {
-          console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
-          console.error('  anpm login을 먼저 실행하세요.')
+          console.error('\x1b[31mError: Authentication required.\x1b[0m')
+          console.error('  Run anpm login first.')
         }
         process.exit(1)
       }
@@ -51,15 +51,15 @@ export function registerOrgs(program: Command): void {
         }
 
         if (orgs.length === 0) {
-          console.log('\nOrganization이 없습니다.')
-          console.log('\x1b[33m  Organization을 만들려면: anpm orgs create "이름"\x1b[0m')
+          console.log('\nNo organizations found.')
+          console.log('\x1b[33m  Create one: anpm orgs create "name"\x1b[0m')
         } else {
-          console.log(`\n\x1b[1m내 Organization\x1b[0m (${orgs.length}개):\n`)
+          console.log(`\n\x1b[1mMy Organizations\x1b[0m (${orgs.length}):\n`)
           for (const o of orgs) {
-            const role = o.role === 'owner' ? '\x1b[33m오너\x1b[0m'
-              : o.role === 'admin' ? '\x1b[36m관리자\x1b[0m'
-              : o.role === 'builder' ? '\x1b[36m빌더\x1b[0m'
-              : '\x1b[90m멤버\x1b[0m'
+            const role = o.role === 'owner' ? '\x1b[33mowner\x1b[0m'
+              : o.role === 'admin' ? '\x1b[36madmin\x1b[0m'
+              : o.role === 'builder' ? '\x1b[36mbuilder\x1b[0m'
+              : '\x1b[90mmember\x1b[0m'
             const desc = o.description
               ? `  \x1b[90m${o.description.length > 40 ? o.description.slice(0, 40) + '...' : o.description}\x1b[0m`
               : ''
@@ -69,9 +69,9 @@ export function registerOrgs(program: Command): void {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         if (json) {
-          console.error(JSON.stringify({ error: 'FETCH_FAILED', message, fix: '네트워크 연결을 확인하거나 잠시 후 재시도하세요.' }))
+          console.error(JSON.stringify({ error: 'FETCH_FAILED', message, fix: 'Check your network connection or try again later.' }))
         } else {
-          console.error(`\x1b[31m오류: ${message}\x1b[0m`)
+          console.error(`\x1b[31mError: ${message}\x1b[0m`)
         }
         process.exit(1)
       }
@@ -79,17 +79,17 @@ export function registerOrgs(program: Command): void {
 
   orgsCmd
     .command('create <name>')
-    .description('새 Organization을 생성합니다')
-    .option('--slug <slug>', 'URL slug (미지정 시 이름에서 자동 생성)')
+    .description('Create a new organization')
+    .option('--slug <slug>', 'URL slug (auto-generated from name if not specified)')
     .action(async (name: string, opts: { slug?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       const token = await getValidToken()
       if (!token) {
         if (json) {
-          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'anpm login 실행 후 재시도하세요.' }))
+          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: 'Authentication required.', fix: 'Run anpm login and try again.' }))
         } else {
-          console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
+          console.error('\x1b[31mError: Authentication required.\x1b[0m')
         }
         process.exit(1)
       }
@@ -114,7 +114,7 @@ export function registerOrgs(program: Command): void {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({ message: `${res.status}` })) as { message?: string; error?: string }
-          throw new Error(body.message ?? `Organization 생성 실패 (${res.status})`)
+          throw new Error(body.message ?? `Failed to create organization (${res.status})`)
         }
 
         const org = await res.json() as { slug: string; name: string }
@@ -122,16 +122,16 @@ export function registerOrgs(program: Command): void {
         if (json) {
           console.log(JSON.stringify({ status: 'created', org }))
         } else {
-          console.log(`\x1b[32m✅ Organization "${org.name}" (@${org.slug}) 생성 완료\x1b[0m`)
-          console.log(`\n\x1b[33m  에이전트 배포: anpm publish --org ${org.slug}\x1b[0m`)
-          console.log(`\x1b[33m  멤버 초대: www.anpm.io/orgs/${org.slug}/members\x1b[0m`)
+          console.log(`\x1b[32m✅ Organization "${org.name}" (@${org.slug}) created\x1b[0m`)
+          console.log(`\n\x1b[33m  Publish agents: anpm publish --org ${org.slug}\x1b[0m`)
+          console.log(`\x1b[33m  Invite members: www.anpm.io/orgs/${org.slug}/members\x1b[0m`)
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         if (json) {
           console.error(JSON.stringify({ error: 'CREATE_FAILED', message }))
         } else {
-          console.error(`\x1b[31m오류: ${message}\x1b[0m`)
+          console.error(`\x1b[31mError: ${message}\x1b[0m`)
         }
         process.exit(1)
       }

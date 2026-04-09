@@ -14,9 +14,9 @@ import { resolveProjectPath } from '../lib/paths.js'
 export function registerUpdate(program: Command): void {
   program
     .command('update <slug>')
-    .description('설치된 에이전트를 최신 버전으로 업데이트합니다')
-    .option('--path <install_path>', '설치 경로 지정 (기본: ./.claude)')
-    .option('--code <code>', '초대 코드 (비공개 에이전트 업데이트 시 필요)')
+    .description('Update an installed agent to the latest version')
+    .option('--path <install_path>', 'Install path (default: ./.claude)')
+    .option('--code <code>', 'Access code (for private agent updates)')
     .action(async (slugInput: string, opts: { path?: string; code?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const tempDir = makeTempDir()
@@ -50,7 +50,7 @@ export function registerUpdate(program: Command): void {
           if (json) {
             console.log(JSON.stringify({ status: 'up-to-date', slug, version: latestVersion }))
           } else {
-            console.log(`이미 최신 버전입니다  (${slug} v${latestVersion})`)
+            console.log(`Already up to date  (${slug} v${latestVersion})`)
           }
           return
         }
@@ -60,7 +60,7 @@ export function registerUpdate(program: Command): void {
         if (visibility === 'internal') {
           const token = await getValidToken()
           if (!token) {
-            console.error('이 에이전트는 Org 멤버만 업데이트할 수 있습니다. `anpm login`을 먼저 실행하세요.')
+            console.error('This agent can only be updated by org members. Run `anpm login` first.')
             process.exit(1)
           }
         }
@@ -95,7 +95,7 @@ export function registerUpdate(program: Command): void {
           checkGitInstalled()
           await clonePackage(agent.git_url, agentDir)
         } else {
-          throw new Error('이 에이전트는 재설치가 필요합니다. anpm install로 다시 설치하세요.')
+          throw new Error('This agent needs to be reinstalled. Run anpm install to reinstall.')
         }
 
         // Inject preamble
@@ -142,9 +142,9 @@ export function registerUpdate(program: Command): void {
           console.log(JSON.stringify(result))
         } else {
           const fromLabel = currentVersion ? `v${currentVersion} → ` : ''
-          console.log(`\n\x1b[32m✓ ${agent.name} ${fromLabel}v${latestVersion} 업데이트 완료\x1b[0m`)
-          console.log(`  위치: \x1b[36m${agentDir}\x1b[0m`)
-          console.log(`  symlink: ${deploy.symlinks.length}개`)
+          console.log(`\n\x1b[32m✓ ${agent.name} ${fromLabel}v${latestVersion} updated\x1b[0m`)
+          console.log(`  path: \x1b[36m${agentDir}\x1b[0m`)
+          console.log(`  symlinks: ${deploy.symlinks.length}`)
 
           // Show changelog
           try {
@@ -167,7 +167,7 @@ export function registerUpdate(program: Command): void {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error(JSON.stringify({ error: 'UPDATE_FAILED', message, fix: 'npm update -g anpm-io로 수동 업데이트하세요.' }))
+        console.error(JSON.stringify({ error: 'UPDATE_FAILED', message, fix: 'Run npm update -g anpm-io to update manually.' }))
         process.exit(1)
       } finally {
         removeTempDir(tempDir)

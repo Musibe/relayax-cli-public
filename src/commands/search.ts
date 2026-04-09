@@ -4,7 +4,7 @@ import { trackCommand } from '../lib/step-tracker.js'
 import type { SearchResult } from '../types.js'
 
 function formatTable(results: SearchResult[]): string {
-  if (results.length === 0) return '검색 결과가 없습니다.'
+  if (results.length === 0) return 'No results found.'
 
   const rows = results.map((r) => ({
     slug: r.slug,
@@ -35,9 +35,9 @@ function formatTable(results: SearchResult[]): string {
 export function registerSearch(program: Command): void {
   program
     .command('search <keyword>')
-    .description('Space에서 에이전트 검색 (공개 에이전트 + 내 Space 에이전트)')
-    .option('--tag <tag>', '태그로 필터링')
-    .option('--space <space>', '특정 Space 내에서 검색')
+    .description('Search for agents (public + your organization agents)')
+    .option('--tag <tag>', 'Filter by tag')
+    .option('--space <space>', 'Search within a specific Space')
     .action(async (keyword: string, opts: { tag?: string; space?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       trackCommand('search', { slug: keyword })
@@ -47,16 +47,16 @@ export function registerSearch(program: Command): void {
           console.log(JSON.stringify({ results }))
         } else {
           const spaceSuffix = opts.space ? `  Space: \x1b[35m@${opts.space}\x1b[0m` : ''
-          console.log(`\n검색어: \x1b[36m${keyword}\x1b[0m${opts.tag ? `  태그: \x1b[33m${opts.tag}\x1b[0m` : ''}${spaceSuffix}\n`)
+          console.log(`\nQuery: \x1b[36m${keyword}\x1b[0m${opts.tag ? `  Tag: \x1b[33m${opts.tag}\x1b[0m` : ''}${spaceSuffix}\n`)
           console.log(formatTable(results))
-          console.log(`\n총 ${results.length}건`)
+          console.log(`\n${results.length} result(s)`)
           if (!opts.space && results.length === 0) {
-            console.log('\x1b[33m💡 내 Space에서 검색하려면: anpm search <keyword> --space <space-slug>\x1b[0m')
+            console.log('\x1b[33m💡 Search in your Space: anpm search <keyword> --space <space-slug>\x1b[0m')
           }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error(JSON.stringify({ error: 'SEARCH_FAILED', message, fix: '검색어를 변경하거나 잠시 후 재시도하세요.' }))
+        console.error(JSON.stringify({ error: 'SEARCH_FAILED', message, fix: 'Try different keywords or try again later.' }))
         process.exit(1)
       }
     })

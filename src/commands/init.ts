@@ -22,31 +22,31 @@ function showWelcome(): void {
     '',
     '  \x1b[33m⚡\x1b[0m \x1b[1manpm\x1b[0m — Agent Marketplace',
     '',
-    '  에이전트 CLI에 anpm 커맨드를 연결합니다.',
+    '  Connects anpm commands to your agent CLI.',
     '',
-    '  \x1b[2mUser 커맨드 (글로벌)\x1b[0m',
-    '  /anpm-explore     에이전트 탐색 & 추천',
-    '  /anpm-create      에이전트 생성 & 배포',
-    '  /anpm-status      설치 현황 & Organization',
-    '  /anpm-uninstall   에이전트 삭제',
+    '  \x1b[2mUser commands (global)\x1b[0m',
+    '  /anpm-explore     Discover & recommend agents',
+    '  /anpm-create      Create & publish agents',
+    '  /anpm-status      Installation status & Organizations',
+    '  /anpm-uninstall   Remove agents',
     '',
-    '  \x1b[2mCLI 명령어\x1b[0m',
-    '  anpm install      에이전트 설치 (CLI 한 줄 완결)',
-    '  anpm publish      재배포 (--patch/--minor/--major)',
+    '  \x1b[2mCLI commands\x1b[0m',
+    '  anpm install      Install an agent (one-liner)',
+    '  anpm publish      Re-publish (--patch/--minor/--major)',
     '',
   ]
   console.log(lines.join('\n'))
 }
 
 /**
- * 글로벌 User 커맨드를 감지된 모든 에이전트 CLI에 설치한다.
- * ~/{skillsDir}/commands/anpm/ 에 설치.
- * 기존 파일 중 현재 커맨드 목록에 없는 것은 제거한다.
+ * Install global User commands to all detected agent CLIs.
+ * Installs to ~/{skillsDir}/commands/anpm/.
+ * Removes existing files not in the current command list.
  */
-/** 제거된 레거시 커맨드 → 대체 안내 매핑 */
+/** Removed legacy commands → replacement mapping */
 const LEGACY_COMMANDS: Record<string, string> = {
-  'relay-install': 'anpm install (CLI) 또는 /anpm-explore',
-  'relay-publish': 'anpm publish --patch (CLI) 또는 /anpm-create',
+  'relay-install': 'anpm install (CLI) or /anpm-explore',
+  'relay-publish': 'anpm publish --patch (CLI) or /anpm-create',
 }
 
 export function installGlobalUserCommands(overrideTools?: AITool[]): { installed: boolean; commands: string[]; tools: string[]; removed: string[] } {
@@ -61,7 +61,7 @@ export function installGlobalUserCommands(overrideTools?: AITool[]): { installed
   for (const target of targetDirs) {
     fs.mkdirSync(target.dir, { recursive: true })
 
-    // 기존 파일 중 현재 목록에 없는 것 제거 + 레거시 안내
+    // Remove files not in current list + legacy notices
     for (const file of fs.readdirSync(target.dir)) {
       const id = file.replace(/\.md$/, '')
       if (!currentIds.has(id)) {
@@ -72,7 +72,7 @@ export function installGlobalUserCommands(overrideTools?: AITool[]): { installed
       }
     }
 
-    // 현재 커맨드 설치 (덮어쓰기)
+    // Install current commands (overwrite)
     for (const cmd of USER_COMMANDS) {
       fs.writeFileSync(target.getPath(cmd.id), formatCommandFile(cmd))
     }
@@ -88,7 +88,7 @@ export function installGlobalUserCommands(overrideTools?: AITool[]): { installed
 }
 
 /**
- * 글로벌 User 커맨드가 이미 설치되어 있는지 확인한다.
+ * Check if global User commands are already installed.
  */
 export function hasGlobalUserCommands(overrideTools?: AITool[]): boolean {
   if (overrideTools) {
@@ -107,11 +107,11 @@ export function hasGlobalUserCommands(overrideTools?: AITool[]): boolean {
 export function registerInit(program: Command): void {
   program
     .command('init')
-    .description('에이전트 CLI에 anpm 슬래시 커맨드를 설치합니다')
-    .option('--tools <tools>', '설치할 에이전트 CLI 지정 (쉼표 구분)')
-    .option('--all', '감지된 모든 에이전트 CLI에 설치')
-    .option('--auto', '대화형 프롬프트 없이 자동으로 모든 감지된 CLI에 설치')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
+    .description('Install anpm slash commands to agent CLIs')
+    .option('--tools <tools>', 'Specify agent CLIs to install (comma-separated)')
+    .option('--all', 'Install to all detected agent CLIs')
+    .option('--auto', 'Auto-install to all detected CLIs without prompts')
+    .option('--project <dir>', 'Project root path (default: cwd, env: ANPM_PROJECT_PATH)')
     .action(async (opts: { tools?: string; all?: boolean; auto?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
@@ -121,7 +121,7 @@ export function registerInit(program: Command): void {
       const projectPath = resolveProjectPath(opts.project)
       const detected = detectAgentCLIs(projectPath)
 
-      // ── 0. --json 모드에서 --tools/--all 없으면 MISSING_TOOLS 에러 ──
+      // ── 0. In --json mode, error if --tools/--all not specified ──
       if (json && !opts.tools && !opts.all && !opts.auto) {
         const detectedOptions = detected.map((t) => ({ value: t.value, label: t.name }))
         if (detectedOptions.length === 0) {
@@ -129,14 +129,14 @@ export function registerInit(program: Command): void {
         }
         console.error(JSON.stringify({
           error: 'MISSING_TOOLS',
-          message: '설치할 에이전트 CLI를 선택하세요.',
-          fix: `anpm init --tools <도구1,도구2> --json 또는 anpm init --all --json`,
+          message: 'Select agent CLIs to install.',
+          fix: `anpm init --tools <tool1,tool2> --json or anpm init --all --json`,
           options: detectedOptions,
         }))
         process.exit(1)
       }
 
-      // ── 1. 글로벌 User 커맨드 설치 ──
+      // ── 1. Install global User commands ──
       let globalStatus: 'installed' | 'updated' | 'already' = 'already'
 
       let globalTools: string[] = []
@@ -163,7 +163,7 @@ export function registerInit(program: Command): void {
         showWelcome()
       }
 
-      // ── 2. 출력 ──
+      // ── 2. Output ──
       if (json) {
         console.log(JSON.stringify({
           status: 'ok',
@@ -174,31 +174,31 @@ export function registerInit(program: Command): void {
           },
         }))
       } else {
-        console.log(`\n\x1b[32m✓ anpm 초기화 완료\x1b[0m\n`)
+        console.log(`\n\x1b[32m✓ anpm initialized\x1b[0m\n`)
 
-        // 레거시 커맨드 마이그레이션 안내
+        // Legacy command migration notice
         if (removedCommands.length > 0) {
-          console.log(`  \x1b[33m⚠ 변경된 커맨드:\x1b[0m`)
+          console.log(`  \x1b[33m⚠ Changed commands:\x1b[0m`)
           for (const id of removedCommands) {
             console.log(`    \x1b[31m✗ /${id}\x1b[0m → ${LEGACY_COMMANDS[id]}`)
           }
           console.log()
         }
 
-        // 글로벌
+        // Global
         {
-          const toolNames = globalTools.length > 0 ? globalTools.join(', ') : '(감지된 CLI 없음)'
-          console.log(`  \x1b[36m커맨드 (글로벌)\x1b[0m — ${globalStatus === 'updated' ? '업데이트됨' : '설치됨'}`)
-          console.log(`  감지된 CLI: \x1b[36m${toolNames}\x1b[0m`)
+          const toolNames = globalTools.length > 0 ? globalTools.join(', ') : '(no CLI detected)'
+          console.log(`  \x1b[36mCommands (global)\x1b[0m — ${globalStatus === 'updated' ? 'updated' : 'installed'}`)
+          console.log(`  Detected CLIs: \x1b[36m${toolNames}\x1b[0m`)
           for (const cmd of USER_COMMANDS) {
             console.log(`    /${cmd.id}`)
           }
           console.log()
         }
 
-        console.log('  에이전트를 만들려면 \x1b[33manpm create <name>\x1b[0m을 사용하세요.')
+        console.log('  To create an agent, use \x1b[33manpm create <name>\x1b[0m.')
         console.log()
-        console.log('  IDE를 재시작하면 슬래시 커맨드가 활성화됩니다.')
+        console.log('  Restart your IDE to activate slash commands.')
       }
     })
 }

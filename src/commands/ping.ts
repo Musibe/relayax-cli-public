@@ -6,8 +6,8 @@ import { isScopedSlug, parseSlug } from '../lib/slug.js'
 export function registerPing(program: Command): void {
   program
     .command('ping <slug>', { hidden: true })
-    .description('사용 현황을 기록합니다 (preamble용 경량 명령)')
-    .option('--quiet', '출력 없이 실행')
+    .description('Record usage (lightweight preamble command)')
+    .option('--quiet', 'Run without output')
     .action(async (slugInput: string, opts: { quiet?: boolean }) => {
       // Resolve slug
       let slug: string
@@ -31,7 +31,7 @@ export function registerPing(program: Command): void {
       const version = entry?.version
       const agentId = entry?.agent_id
 
-      // Fire-and-forget ping (agent_id 없어도 slug fallback으로 전송)
+      // Fire-and-forget ping (falls back to slug if no agent_id)
       await sendUsagePing(agentId ?? null, slug, version)
 
       if (!opts.quiet) {

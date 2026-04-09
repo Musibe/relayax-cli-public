@@ -1,30 +1,30 @@
-프로젝트에 맞는 에이전트를 찾아 추천하고 설치합니다.
+Find and recommend agents that match your project, then install them.
 
-## 프로젝트 분석
+## Project Analysis
 
-현재 프로젝트의 기술 스택, 구조, 패턴을 파악합니다:
-- 사용 중인 프레임워크/라이브러리 (package.json, import 패턴)
-- 프로젝트 구조 (디렉토리 레이아웃, 주요 파일)
-- 기존 설치된 에이전트 (`anpm list --json`)
+Analyze the current project's tech stack, structure, and patterns:
+- Frameworks/libraries in use (package.json, import patterns)
+- Project structure (directory layout, key files)
+- Already installed agents (`anpm list --json`)
 
-## 에이전트 검색
+## Agent Search
 
-`anpm search <keyword>` 명령어로 검색합니다.
-프로젝트 컨텍스트에 맞는 키워드를 선택합니다 (기술 스택, 작업 유형 등).
-여러 키워드로 반복 검색하여 폭넓게 탐색합니다.
+Search using `anpm search <keyword>`.
+Choose keywords based on project context (tech stack, task type, etc.).
+Search with multiple keywords for broader discovery.
 
-## 추천
+## Recommendation
 
-검색 결과 중 프로젝트에 가장 적합한 에이전트를 추천합니다:
-- 추천 이유를 프로젝트 컨텍스트와 연결하여 설명
-- 에이전트의 주요 커맨드/기능을 요약
+Recommend the best-fitting agents from the search results:
+- Explain why each is relevant to the project context
+- Summarize key commands/features of each agent
 
-## 설치
+## Installation
 
-사용자가 선택하면 `anpm install <slug>` 을 실행합니다.
+When the user selects an agent, run `anpm install <slug>`.
 
-scope 결정 기준:
-- 범용 도구 (코드 리뷰, 문서 생성, 테스트) → `anpm install <slug>` (글로벌 기본)
-- 프로젝트 특화 (특정 프레임워크, 팀 컨벤션) → `anpm install <slug> --local`
+Scope guidelines:
+- General-purpose tools (code review, docs, testing) → `anpm install <slug>` (global default)
+- Project-specific (particular framework, team conventions) → `anpm install <slug> --local`
 
 {{ERROR_HANDLING_GUIDE}}

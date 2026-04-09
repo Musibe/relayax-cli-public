@@ -5,8 +5,8 @@ import { getDeviceHash } from './device-hash.js'
 const pkg = require('../../package.json') as { version: string }
 
 /**
- * CLI 에러를 서버에 fire-and-forget으로 리포트한다.
- * 실패해도 사용자에게 표시하지 않는다.
+ * Report CLI errors to server (fire-and-forget).
+ * Failures are silently ignored.
  */
 export function reportCliError(
   command: string,

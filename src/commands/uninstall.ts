@@ -13,8 +13,8 @@ import { AI_TOOLS } from '../lib/ai-tools.js'
 import { resolveProjectPath } from '../lib/paths.js'
 
 /**
- * deployed_files에서 에이전트 설정 디렉토리(skillsDir) 기반 boundary를 추론한다.
- * 예: deployed_files에 '~/.cursor/commands/relay/x.md'가 있으면 boundary는 basePath/.cursor
+ * Infer boundary from deployed_files based on skillsDir.
+ * e.g.: if deployed_files contains '~/.cursor/commands/relay/x.md', boundary is basePath/.cursor
  */
 function inferBoundary(deployedFiles: string[], basePath: string): string {
   const skillsDirs = AI_TOOLS.map((t) => t.skillsDir)
@@ -26,15 +26,15 @@ function inferBoundary(deployedFiles: string[], basePath: string): string {
       }
     }
   }
-  // fallback: 첫 번째 파일의 상위 디렉토리 중 basePath 직속 디렉토리
+  // fallback: first-level subdirectory of basePath from the first file
   return path.join(basePath, '.claude')
 }
 
 export function registerUninstall(program: Command): void {
   program
     .command('uninstall <slug>')
-    .description('에이전트 제거')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .description('Uninstall an agent')
+    .option('--project <dir>', 'Project root path (default: cwd, env: RELAY_PROJECT_PATH)')
     .action((slugInput: string, _opts: { project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const localInstalled = loadInstalled()
@@ -57,11 +57,11 @@ export function registerUninstall(program: Command): void {
       const globalEntry = globalInstalled[slug]
 
       if (!localEntry && !globalEntry) {
-        const msg = { error: 'NOT_INSTALLED', message: `'${slugInput}'는 설치되어 있지 않습니다.` }
+        const msg = { error: 'NOT_INSTALLED', message: `'${slugInput}' is not installed.` }
         if (json) {
           console.error(JSON.stringify(msg))
         } else {
-          console.error(`\x1b[31m오류:\x1b[0m ${msg.message}`)
+          console.error(`\x1b[31mError:\x1b[0m ${msg.message}`)
         }
         process.exit(1)
       }
@@ -138,8 +138,8 @@ export function registerUninstall(program: Command): void {
       if (json) {
         console.log(JSON.stringify(result))
       } else {
-        console.log(`\n\x1b[32m✓ ${slug} 제거 완료\x1b[0m`)
-        console.log(`  삭제된 파일: ${totalRemoved}개`)
+        console.log(`\n\x1b[32m✓ ${slug} removed\x1b[0m`)
+        console.log(`  Files removed: ${totalRemoved}`)
       }
     })
 }

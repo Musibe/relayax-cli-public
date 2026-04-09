@@ -17,13 +17,13 @@ export interface DeployResult {
 }
 
 /**
- * agentDir 내 skills/, commands/, agents/, rules/ 하위 항목을
- * 감지된 AI tool의 skillsDir에 symlink로 생성한다.
+ * Create symlinks from skills/, commands/, agents/, rules/ under agentDir
+ * to detected AI tool skillsDir directories.
  *
- * @param agentDir  .relay/agents/<owner>/<name>/ 경로
- * @param slug      @owner/name 형태
+ * @param agentDir  .relay/agents/<owner>/<name>/ path
+ * @param slug      @owner/name format
  * @param scope     'global' | 'local'
- * @param projectPath  프로젝트 루트 경로 (local scope 시 사용)
+ * @param projectPath  Project root path (used for local scope)
  */
 export async function deploySymlinks(
   agentDir: string,
@@ -75,23 +75,23 @@ export async function deploySymlinks(
         const destDir = path.join(baseDir, dir)
         const destPath = path.join(destDir, entry.name)
 
-        // 대상 디렉토리 생성
+        // Create target directory
         fs.mkdirSync(destDir, { recursive: true })
 
-        // 충돌 처리
+        // Conflict handling
         if (fs.existsSync(destPath) || isSymlink(destPath)) {
           if (isSymlink(destPath)) {
             const existingTarget = fs.readlinkSync(destPath)
             if (!existingTarget.includes('.anpm/agents/') || existingTarget.startsWith(agentDir)) {
-              // 같은 에이전트 또는 relay가 아닌 symlink → 조용히 교체
+              // Same agent or non-relay symlink — silently replace
             } else {
-              // 다른 에이전트의 symlink → 경고
-              result.warnings.push(`⚠ ${dir}/${entry.name} 가 다른 에이전트에서 교체됩니다`)
+              // Symlink from another agent — warn
+              result.warnings.push(`⚠ ${dir}/${entry.name} is being replaced from another agent`)
             }
             fs.unlinkSync(destPath)
           } else {
-            // 일반 파일/디렉토리 → 보호, 건너뜀
-            result.warnings.push(`⚠ ${destPath} 는 사용자 파일이므로 건너뜁니다`)
+            // Regular file/directory — protect, skip
+            result.warnings.push(`⚠ ${destPath} is a user file, skipping`)
             continue
           }
         }
@@ -115,7 +115,7 @@ function isSymlink(p: string): boolean {
 }
 
 /**
- * symlink 목록을 기반으로 symlink를 제거한다.
+ * Remove symlinks based on a list of symlink paths.
  */
 export function removeSymlinks(symlinks: string[]): string[] {
   const removed: string[] = []
@@ -125,7 +125,7 @@ export function removeSymlinks(symlinks: string[]): string[] {
         fs.unlinkSync(link)
         removed.push(link)
       } else if (fs.existsSync(link)) {
-        // symlink이 아닌 파일이면 건너뜀 (사용자 파일 보호)
+        // Not a symlink — skip (protect user files)
       }
     } catch {
       // best-effort
@@ -143,7 +143,7 @@ interface RequiresCheckResult {
 }
 
 /**
- * agentDir의 relay.yaml에서 requires를 읽고 체크 결과를 반환한다.
+ * Read requires from relay.yaml in agentDir and return check results.
  */
 export function checkRequires(agentDir: string): RequiresCheckResult[] {
   const results: RequiresCheckResult[] = []
@@ -174,8 +174,8 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
         label: 'runtime',
         status: ok ? 'ok' : 'warn',
         message: ok
-          ? `Node.js >=${required} — ${ver} 확인됨`
-          : `Node.js >=${required} — ${ver} (업그레이드 필요)`,
+          ? `Node.js >=${required} — ${ver} found`
+          : `Node.js >=${required} — ${ver} (upgrade required)`,
       })
     }
   }
@@ -189,8 +189,8 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
         label: 'runtime',
         status: ok ? 'ok' : 'warn',
         message: ok
-          ? `Python >=${required} — ${clean} 확인됨`
-          : `Python >=${required} — ${clean} (업그레이드 필요)`,
+          ? `Python >=${required} — ${clean} found`
+          : `Python >=${required} — ${clean} (upgrade required)`,
       })
     }
   }
@@ -201,13 +201,13 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
       if (!isSafeName(cli.name)) continue
       const found = getCommandOutput('which', [cli.name])
       if (found) {
-        results.push({ label: 'cli', status: 'ok', message: `${cli.name} — 설치됨` })
+        results.push({ label: 'cli', status: 'ok', message: `${cli.name} — installed` })
       } else {
         const installHint = cli.install ? ` → ${cli.install}` : ''
         results.push({
           label: 'cli',
           status: cli.required !== false ? 'missing' : 'warn',
-          message: `${cli.name} — 미설치${installHint}`,
+          message: `${cli.name} — not installed${installHint}`,
         })
       }
     }
@@ -218,14 +218,14 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
     for (const env of requires.env as RequiresEnv[]) {
       const val = process.env[env.name]
       if (val) {
-        results.push({ label: 'env', status: 'ok', message: `${env.name} — 설정됨` })
+        results.push({ label: 'env', status: 'ok', message: `${env.name} — set` })
       } else {
         const desc = env.description ? ` (${env.description})` : ''
-        const hint = env.setup_hint ? `\n    설정 방법:\n${env.setup_hint.split('\n').map((l: string) => `      ${l}`).join('\n')}` : ''
+        const hint = env.setup_hint ? `\n    Setup:\n${env.setup_hint.split('\n').map((l: string) => `      ${l}`).join('\n')}` : ''
         results.push({
           label: 'env',
           status: env.required !== false ? 'missing' : 'warn',
-          message: `${env.name} — 미설정${desc}${hint}`,
+          message: `${env.name} — not set${desc}${hint}`,
         })
       }
     }
@@ -240,12 +240,12 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
       const found = getCommandOutput('npm', ['list', name])
       const installed = found ? !found.includes('(empty)') && !found.includes('ERR') : false
       if (installed) {
-        results.push({ label: 'npm', status: 'ok', message: `${name} — 설치됨` })
+        results.push({ label: 'npm', status: 'ok', message: `${name} — installed` })
       } else {
         results.push({
           label: 'npm',
           status: isRequired ? 'missing' : 'warn',
-          message: `${name} — 미설치`,
+          message: `${name} — not installed`,
         })
       }
     }
@@ -260,7 +260,7 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
       results.push({
         label: 'mcp',
         status: 'warn',
-        message: `${mcp.name} MCP — 설정 필요: ${configStr}`,
+        message: `${mcp.name} MCP — setup required: ${configStr}`,
       })
     }
   }
@@ -269,7 +269,7 @@ export function checkRequires(agentDir: string): RequiresCheckResult[] {
 }
 
 /**
- * requires 체크 결과를 콘솔에 출력한다.
+ * Print requires check results to console.
  */
 export function printRequiresCheck(results: RequiresCheckResult[]): void {
   if (results.length === 0) return
@@ -282,7 +282,7 @@ export function printRequiresCheck(results: RequiresCheckResult[]): void {
 
   const hasMissing = results.some((r) => r.status === 'missing')
   if (hasMissing) {
-    console.log('\n  \x1b[33m⚠️  필수 요구사항이 충족되지 않았습니다. 에이전트 기능이 제한될 수 있습니다.\x1b[0m')
+    console.log('\n  \x1b[33m⚠️  Required dependencies not met. Some agent features may not work.\x1b[0m')
   }
 }
 
@@ -295,7 +295,7 @@ function getCommandOutput(cmd: string, args: string[] = []): string | null {
   }
 }
 
-/** relay.yaml에서 온 이름이 안전한 식별자인지 확인 */
+/** Check if a name from relay.yaml is a safe identifier */
 function isSafeName(name: string): boolean {
   return /^[a-zA-Z0-9._@/-]+$/.test(name)
 }
@@ -365,8 +365,8 @@ export function uninstallAgent(files: string[]): string[] {
 }
 
 /**
- * 빈 상위 디렉토리를 boundary까지 정리한다.
- * 예: /home/.claude/skills/cardnews/ 가 비었으면 삭제, /home/.claude/skills/는 유지
+ * Clean up empty parent directories up to boundary.
+ * e.g., remove /home/.claude/skills/cardnews/ if empty, keep /home/.claude/skills/
  */
 export function cleanEmptyParents(filePath: string, boundary: string): void {
   let dir = path.dirname(filePath)

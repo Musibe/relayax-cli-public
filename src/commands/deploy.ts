@@ -280,7 +280,7 @@ export function registerDeploy(program: Command): void {
         if (json) {
           console.error(JSON.stringify({ error: 'DEPLOY_FAILED', message: msg }))
         } else {
-          console.error(`\x1b[31m오류: ${msg}\x1b[0m`)
+          console.error(`\x1b[31mError: ${msg}\x1b[0m`)
         }
         process.exit(1)
       }

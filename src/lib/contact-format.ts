@@ -1,9 +1,9 @@
 import type { ContactItem } from '../types.js'
 
 /**
- * contact_links를 "key: value" 쌍의 배열로 정규화한다.
- * - 배열 형식 (신규): [{type, label, value}, ...] → ["label: value", ...]
- * - 객체 형식 (레거시): {email: "a@b"} → ["email: a@b", ...]
+ * Normalize contact_links to an array of "key: value" pairs.
+ * - Array format (new): [{type, label, value}, ...] → ["label: value", ...]
+ * - Object format (legacy): {email: "a@b"} → ["email: a@b", ...]
  */
 export function formatContactParts(
   contactLinks: ContactItem[] | Record<string, string> | unknown

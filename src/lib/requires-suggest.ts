@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import type { Requires, RequiresEnv, RequiresCli } from '../commands/publish.js'
 
-// Python stdlib — 이 목록에 없는 import는 pip 패키지 후보
+// Python stdlib — imports not in this set are pip package candidates
 const PYTHON_STDLIB = new Set([
   'abc', 'argparse', 'ast', 'asyncio', 'base64', 'bisect', 'calendar',
   'cmath', 'codecs', 'collections', 'concurrent', 'contextlib', 'copy',
@@ -22,12 +22,12 @@ const PYTHON_STDLIB = new Set([
   'tomllib', 'trace', 'traceback', 'tracemalloc', 'types', 'typing',
   'unicodedata', 'unittest', 'urllib', 'uuid', 'venv', 'warnings',
   'wave', 'weakref', 'webbrowser', 'xml', 'xmlrpc', 'zipfile', 'zipimport', 'zlib',
-  // 자주 쓰이는 서브모듈
+  // commonly used submodules
   'os.path', 'collections.abc', 'concurrent.futures', 'urllib.parse',
   'http.client', 'http.server', 'email.mime',
 ])
 
-// pip 패키지명 → import 이름 매핑 (다른 경우만)
+// pip package name → import name mapping (only when different)
 const PIP_IMPORT_MAP: Record<string, string> = {
   'Pillow': 'PIL',
   'google-genai': 'google',
@@ -38,7 +38,7 @@ const PIP_IMPORT_MAP: Record<string, string> = {
   'pyyaml': 'yaml',
 }
 
-// import 이름 → pip 패키지명 역매핑
+// import name → pip package name reverse mapping
 const IMPORT_TO_PIP: Record<string, string> = {}
 for (const [pip, imp] of Object.entries(PIP_IMPORT_MAP)) {
   IMPORT_TO_PIP[imp] = pip
@@ -47,7 +47,7 @@ for (const [pip, imp] of Object.entries(PIP_IMPORT_MAP)) {
 interface Suggestion {
   category: 'env' | 'cli' | 'pip' | 'runtime'
   name: string
-  source: string // 어디서 감지했는지 (파일명)
+  source: string // where it was detected (filename)
   description?: string
   setup_hint?: string
   install?: string
@@ -55,13 +55,13 @@ interface Suggestion {
 }
 
 /**
- * .relay/ 디렉토리를 스캔하여 requires에 빠진 항목을 제안한다.
+ * Scan .relay/ directory and suggest missing requires entries.
  */
 export function suggestRequires(relayDir: string, currentRequires?: Requires): Suggestion[] {
   const suggestions: Suggestion[] = []
   const existing = normalizeExisting(currentRequires)
 
-  // 모든 스크립트 파일 수집
+  // Collect all script files
   const scripts = findScripts(relayDir)
 
   for (const scriptPath of scripts) {
@@ -69,9 +69,9 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
     const relName = path.relative(relayDir, scriptPath)
     const ext = path.extname(scriptPath)
 
-    // Python 스크립트
+    // Python scripts
     if (ext === '.py') {
-      // 환경변수 감지: os.environ.get("VAR") / os.environ["VAR"] / os.getenv("VAR")
+      // Detect env vars: os.environ.get("VAR") / os.environ["VAR"] / os.getenv("VAR")
       const envPattern = /os\.environ\.get\(\s*['"](\w+)['"]/g
       const envPattern2 = /os\.environ\[['"](\w+)['"]\]/g
       const envPattern3 = /os\.getenv\(\s*['"](\w+)['"]/g
@@ -85,7 +85,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
         }
       }
 
-      // pip 패키지 감지: import xxx / from xxx import
+      // Detect pip packages: import xxx / from xxx import
       const importPattern = /^(?:import|from)\s+(\w+)/gm
       let match
       while ((match = importPattern.exec(content)) !== null) {
@@ -97,7 +97,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
         }
       }
 
-      // shebang → python3 런타임
+      // shebang → python3 runtime
       if (content.startsWith('#!/') && content.includes('python')) {
         if (!existing.hasRuntime.python) {
           suggestions.push({ category: 'runtime', name: 'python', source: relName })
@@ -105,9 +105,9 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
       }
     }
 
-    // Node/TS 스크립트
+    // Node/TS scripts
     if (ext === '.js' || ext === '.ts' || ext === '.mjs') {
-      // 환경변수 감지: process.env.VAR / process.env['VAR']
+      // Detect env vars: process.env.VAR / process.env['VAR']
       const envPattern = /process\.env\.(\w+)/g
       const envPattern2 = /process\.env\[['"](\w+)['"]\]/g
       for (const pattern of [envPattern, envPattern2]) {
@@ -123,7 +123,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
     }
   }
 
-  // setup-* 스킬 감지: 관련 env가 requires에 없으면 제안
+  // Detect setup-* skills: suggest env if not in requires
   const skillsDir = path.join(relayDir, 'skills')
   if (fs.existsSync(skillsDir)) {
     for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
@@ -132,7 +132,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
         const skillMd = path.join(skillsDir, setupName, 'SKILL.md')
         if (fs.existsSync(skillMd)) {
           const skillContent = fs.readFileSync(skillMd, 'utf-8')
-          // SKILL.md에서 환경변수 참조 찾기
+          // Find env var references in SKILL.md
           const envRefs = /[A-Z][A-Z0-9_]{2,}/g
           let match
           while ((match = envRefs.exec(skillContent)) !== null) {
@@ -144,7 +144,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
                   category: 'env',
                   name: varName,
                   source: `skills/${setupName}/SKILL.md`,
-                  setup_hint: `/${setupName} 스킬을 실행하세요`,
+                  setup_hint: `Run /${setupName} skill`,
                   required: false,
                 })
               }
@@ -155,7 +155,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
     }
   }
 
-  // CLI 도구 감지: subprocess.run(['cmd', ...]) / execSync('cmd ...')
+  // Detect CLI tools: subprocess.run(['cmd', ...]) / execSync('cmd ...')
   for (const scriptPath of scripts) {
     const content = fs.readFileSync(scriptPath, 'utf-8')
     const relName = path.relative(relayDir, scriptPath)
@@ -182,7 +182,7 @@ export function suggestRequires(relayDir: string, currentRequires?: Requires): S
     }
   }
 
-  // 중복 제거
+  // Deduplicate
   const seen = new Set<string>()
   return suggestions.filter((s) => {
     const key = `${s.category}:${s.name}`
@@ -204,7 +204,7 @@ function normalizeExisting(requires?: Requires) {
   for (const e of requires.env ?? []) envNames.add(e.name)
   for (const c of requires.cli ?? []) cliNames.add(c.name)
   for (const n of requires.npm ?? []) npmNames.add(typeof n === 'string' ? n : n.name)
-  // pip은 Requires 타입에 없지만 relay.yaml에 존재할 수 있음
+  // pip is not in Requires type but may exist in relay.yaml
   const raw = requires as Record<string, unknown>
   if (Array.isArray(raw.pip)) {
     for (const p of raw.pip) pipNames.add(typeof p === 'string' ? p : (p as { name: string }).name)
@@ -235,7 +235,7 @@ function findScripts(dir: string): string[] {
 }
 
 /**
- * 제안 항목을 사람이 읽기 좋은 형태로 포맷한다.
+ * Format suggestions in a human-readable form.
  */
 export function formatSuggestions(suggestions: Suggestion[]): string[] {
   const lines: string[] = []
@@ -246,30 +246,30 @@ export function formatSuggestions(suggestions: Suggestion[]): string[] {
   const runtimes = suggestions.filter((s) => s.category === 'runtime')
 
   if (envs.length > 0) {
-    lines.push('  환경변수:')
+    lines.push('  Environment variables:')
     for (const e of envs) {
       const hint = e.setup_hint ? ` (${e.setup_hint})` : ''
-      lines.push(`    ${e.name}${hint} — ${e.source}에서 감지`)
+      lines.push(`    ${e.name}${hint} — detected in ${e.source}`)
     }
   }
   if (clis.length > 0) {
-    lines.push('  CLI 도구:')
-    for (const c of clis) lines.push(`    ${c.name} — ${c.source}에서 감지`)
+    lines.push('  CLI tools:')
+    for (const c of clis) lines.push(`    ${c.name} — detected in ${c.source}`)
   }
   if (pips.length > 0) {
-    lines.push('  pip 패키지:')
-    for (const p of pips) lines.push(`    ${p.name} — ${p.source}에서 감지`)
+    lines.push('  pip packages:')
+    for (const p of pips) lines.push(`    ${p.name} — detected in ${p.source}`)
   }
   if (runtimes.length > 0) {
-    lines.push('  런타임:')
-    for (const r of runtimes) lines.push(`    ${r.name} — ${r.source}에서 감지`)
+    lines.push('  Runtime:')
+    for (const r of runtimes) lines.push(`    ${r.name} — detected in ${r.source}`)
   }
 
   return lines
 }
 
 /**
- * 제안 항목을 requires 객체에 병합한다.
+ * Merge suggestions into a requires object.
  */
 export function mergeIntoRequires(requires: Requires, suggestions: Suggestion[]): Requires {
   const result = { ...requires }

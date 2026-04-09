@@ -15,7 +15,7 @@ import { resolveProjectPath } from '../lib/paths.js'
 const DEFAULT_DIRS = ['.anpm/skills', '.anpm/commands'] as const
 
 /**
- * 글로벌 User 커맨드가 없으면 설치한다.
+ * Install global User commands if not already present.
  */
 function ensureGlobalUserCommands(): boolean {
   if (hasGlobalUserCommands()) return false
@@ -26,12 +26,12 @@ function ensureGlobalUserCommands(): boolean {
 export function registerCreate(program: Command): void {
   program
     .command('create <name>')
-    .description('새 에이전트 프로젝트를 생성합니다')
-    .option('--description <desc>', '에이전트 설명')
-    .option('--slug <slug>', 'URL용 식별자 (영문 소문자, 숫자, 하이픈)')
-    .option('--tags <tags>', '태그 (쉼표 구분)')
-    .option('--visibility <visibility>', '공개 범위 (public, private, internal)')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
+    .description('Create a new agent project')
+    .option('--description <desc>', 'Agent description')
+    .option('--slug <slug>', 'URL-safe identifier (lowercase, numbers, hyphens)')
+    .option('--tags <tags>', 'Tags (comma-separated)')
+    .option('--visibility <visibility>', 'Visibility (public, private, internal)')
+    .option('--project <dir>', 'Project root path (default: cwd, env: ANPM_PROJECT_PATH)')
     .action(async (name: string, opts: { description?: string; slug?: string; tags?: string; visibility?: string; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       trackCommand('create')
@@ -40,17 +40,17 @@ export function registerCreate(program: Command): void {
       const relayYamlPath = path.join(relayDir, 'anpm.yaml')
       const isTTY = Boolean(process.stdin.isTTY) && !json
 
-      // 1. .anpm/anpm.yaml 이미 존재하면 에러
+      // 1. Error if .anpm/anpm.yaml already exists
       if (fs.existsSync(relayYamlPath)) {
         if (json) {
-          console.error(JSON.stringify({ error: 'ALREADY_EXISTS', message: '.anpm/anpm.yaml이 이미 존재합니다.', fix: '기존 .anpm/anpm.yaml을 확인하세요. 새로 시작하려면 삭제 후 재시도.' }))
+          console.error(JSON.stringify({ error: 'ALREADY_EXISTS', message: '.anpm/anpm.yaml already exists.', fix: 'Check your existing .anpm/anpm.yaml. To start fresh, delete it and try again.' }))
         } else {
-          console.error('.anpm/anpm.yaml이 이미 존재합니다. 기존 에이전트 프로젝트에서는 `anpm init`을 사용하세요.')
+          console.error('.anpm/anpm.yaml already exists. Use `anpm init` for existing agent projects.')
         }
         process.exit(1)
       }
 
-      // 2. 메타데이터 수집
+      // 2. Collect metadata
       let slug = opts.slug ?? slugify(name)
 
       let description = opts.description ?? ''
@@ -58,21 +58,21 @@ export function registerCreate(program: Command): void {
       let visibility: 'public' | 'private' | 'internal' = (opts.visibility as 'public' | 'private' | 'internal') ?? 'public'
 
       if (json) {
-        // --json 모드: slug가 비어있으면 에러
+        // --json mode: error if slug is empty
         if (!slug) {
           console.error(JSON.stringify({
             error: 'INVALID_SLUG',
-            message: '이름에서 유효한 slug를 생성할 수 없습니다. 영문 이름을 사용하거나 --slug 옵션을 지정하세요.',
-            fix: `anpm create "${name}" --slug <영문-slug> --description <설명> --json`,
+            message: 'Cannot generate a valid slug from the name. Use an ASCII name or specify --slug.',
+            fix: `anpm create "${name}" --slug <slug> --description <description> --json`,
           }))
           process.exit(1)
         }
-        // --json 모드: 필수 값 부족 시 에러 반환 (프롬프트 없음)
+        // --json mode: error if required fields missing (no prompt)
         if (!opts.description) {
           console.error(JSON.stringify({
             error: 'MISSING_FIELD',
-            message: '에이전트 설명이 필요합니다.',
-            fix: `anpm create ${name} --description <설명> --json`,
+            message: 'Agent description is required.',
+            fix: `anpm create ${name} --description <description> --json`,
             field: 'description',
           }))
           process.exit(1)
@@ -80,12 +80,12 @@ export function registerCreate(program: Command): void {
         if (!opts.visibility) {
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
-            message: '공개 범위를 선택하세요.',
+            message: 'Select visibility.',
             fix: `anpm create ${name} --description "${description}" --visibility <visibility> --json`,
             options: [
-              { value: 'public', label: '공개 — 누구나 검색 및 설치 가능' },
-              { value: 'private', label: '비공개 — 허가 코드 등록자만 사용 가능' },
-              { value: 'internal', label: '내부 — 조직 내의 누구나 사용 가능' },
+              { value: 'public', label: 'Public — anyone can discover and install' },
+              { value: 'private', label: 'Private — only authorized users with an access code' },
+              { value: 'internal', label: 'Internal — anyone in the organization' },
             ],
           }))
           process.exit(1)
@@ -93,12 +93,12 @@ export function registerCreate(program: Command): void {
         if (!['public', 'private', 'internal'].includes(opts.visibility)) {
           console.error(JSON.stringify({
             error: 'INVALID_FIELD',
-            message: `유효하지 않은 visibility 값: ${opts.visibility}`,
-            fix: `visibility는 public, private, internal 중 하나여야 합니다.`,
+            message: `Invalid visibility value: ${opts.visibility}`,
+            fix: `visibility must be one of: public, private, internal.`,
             options: [
-              { value: 'public', label: '공개' },
-              { value: 'private', label: '비공개' },
-              { value: 'internal', label: '내부' },
+              { value: 'public', label: 'Public' },
+              { value: 'private', label: 'Private' },
+              { value: 'internal', label: 'Internal' },
             ],
           }))
           process.exit(1)
@@ -106,16 +106,16 @@ export function registerCreate(program: Command): void {
       } else if (isTTY) {
         const { input: promptInput, select: promptSelect } = await import('@inquirer/prompts')
 
-        console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1manpm create\x1b[0m — 새 에이전트 프로젝트\n`)
+        console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1manpm create\x1b[0m — New agent project\n`)
 
-        // slug가 비어있으면 (한국어 등 비ASCII 이름) slug를 직접 입력받음
+        // If slug is empty (non-ASCII name), prompt for manual input
         if (!slug) {
           slug = await promptInput({
-            message: 'Slug (URL/설치에 사용되는 영문 식별자):',
+            message: 'Slug (URL-safe identifier for install):',
             validate: (v) => {
               const trimmed = v.trim()
-              if (!trimmed) return 'slug를 입력해주세요.'
-              if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(trimmed)) return '소문자, 숫자, 하이픈만 사용 가능합니다.'
+              if (!trimmed) return 'Please enter a slug.'
+              if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(trimmed)) return 'Only lowercase letters, numbers, and hyphens allowed.'
               return true
             },
           })
@@ -124,14 +124,14 @@ export function registerCreate(program: Command): void {
 
         if (!description) {
           description = await promptInput({
-            message: '에이전트 설명:',
-            validate: (v) => v.trim().length > 0 ? true : '설명을 입력해주세요.',
+            message: 'Agent description:',
+            validate: (v) => v.trim().length > 0 ? true : 'Please enter a description.',
           })
         }
 
         if (!opts.tags) {
           const tagsRaw = await promptInput({
-            message: '태그 (쉼표로 구분, 선택):',
+            message: 'Tags (comma-separated, optional):',
             default: '',
           })
           tags = tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)
@@ -139,25 +139,25 @@ export function registerCreate(program: Command): void {
 
         if (!opts.visibility) {
           visibility = await promptSelect<'public' | 'private' | 'internal'>({
-            message: '공개 범위:',
+            message: 'Visibility:',
             choices: [
-              { name: '공개 — 누구나 검색 및 설치 가능', value: 'public' },
-              { name: '비공개 — 허가 코드 등록자만 사용 가능', value: 'private' },
-              { name: '내부 — 조직 내의 누구나 사용 가능', value: 'internal' },
+              { name: 'Public — anyone can discover and install', value: 'public' },
+              { name: 'Private — only authorized users with an access code', value: 'private' },
+              { name: 'Internal — anyone in the organization', value: 'internal' },
             ],
           })
         }
       }
 
-      // 3. recommended_scope 자동 추천
-      //    rules/ 존재 or 프레임워크 태그 → local, 그 외 → global
+      // 3. Auto-recommend recommended_scope
+      //    rules/ exists or framework tag → local, otherwise → global
       const frameworkTags = ['nextjs', 'react', 'vue', 'angular', 'svelte', 'nuxt', 'remix', 'astro', 'django', 'rails', 'laravel', 'spring', 'express', 'fastapi', 'flask']
       const hasRules = fs.existsSync(path.join(projectPath, '.relay', 'rules'))
         || fs.existsSync(path.join(projectPath, 'rules'))
       const hasFrameworkTag = tags.some((t) => frameworkTags.includes(t.toLowerCase()))
       const recommendedScope: 'global' | 'local' = (hasRules || hasFrameworkTag) ? 'local' : 'global'
 
-      // 4. .relay/relay.yaml 생성
+      // 4. Create .relay/relay.yaml
       fs.mkdirSync(relayDir, { recursive: true })
       const yamlData: Record<string, unknown> = {
         name,
@@ -172,7 +172,7 @@ export function registerCreate(program: Command): void {
       }
       fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
 
-      // 4. 디렉토리 구조 생성
+      // 4. Create directory structure
       const createdDirs: string[] = []
       for (const dir of DEFAULT_DIRS) {
         const dirPath = path.join(projectPath, dir)
@@ -182,7 +182,7 @@ export function registerCreate(program: Command): void {
         }
       }
 
-      // 5. 로컬 Builder 슬래시 커맨드 설치
+      // 5. Install local Builder slash commands
       const detected = detectAgentCLIs(projectPath)
       const localResults: { tool: string; commands: string[] }[] = []
 
@@ -200,10 +200,10 @@ export function registerCreate(program: Command): void {
         localResults.push({ tool: tool.name, commands: installed })
       }
 
-      // 6. 글로벌 User 커맨드 (없으면 설치)
+      // 6. Global User commands (install if absent)
       const globalInstalled = ensureGlobalUserCommands()
 
-      // 7. 출력
+      // 7. Output
       if (json) {
         console.log(JSON.stringify({
           status: 'ok',
@@ -216,28 +216,28 @@ export function registerCreate(program: Command): void {
           global_commands: globalInstalled ? 'installed' : 'already',
         }))
       } else {
-        const scopeLabel = recommendedScope === 'global' ? '\x1b[32m글로벌\x1b[0m' : '\x1b[33m로컬\x1b[0m'
-        const scopeReason = hasRules ? 'rules/ 감지' : hasFrameworkTag ? '프레임워크 태그 감지' : '범용 에이전트'
-        console.log(`\n\x1b[32m✓ ${name} 에이전트 프로젝트 생성 완료\x1b[0m\n`)
-        console.log(`  .anpm/anpm.yaml 생성됨`)
+        const scopeLabel = recommendedScope === 'global' ? '\x1b[32mglobal\x1b[0m' : '\x1b[33mlocal\x1b[0m'
+        const scopeReason = hasRules ? 'rules/ detected' : hasFrameworkTag ? 'framework tag detected' : 'general-purpose agent'
+        console.log(`\n\x1b[32m✓ ${name} agent project created\x1b[0m\n`)
+        console.log(`  .anpm/anpm.yaml created`)
         console.log(`  recommended_scope: ${scopeLabel} (${scopeReason})`)
         if (createdDirs.length > 0) {
-          console.log(`  디렉토리 생성: ${createdDirs.join(', ')}`)
+          console.log(`  Directories created: ${createdDirs.join(', ')}`)
         }
 
         if (localResults.length > 0) {
-          console.log(`\n  \x1b[36mBuilder 커맨드 (로컬)\x1b[0m`)
+          console.log(`\n  \x1b[36mBuilder commands (local)\x1b[0m`)
           for (const r of localResults) {
             console.log(`    ${r.tool}: ${r.commands.map((c) => `/${c}`).join(', ')}`)
           }
         }
 
         if (globalInstalled) {
-          console.log(`\n  \x1b[36mUser 커맨드 (글로벌)\x1b[0m — 설치됨`)
+          console.log(`\n  \x1b[36mUser commands (global)\x1b[0m — installed`)
         }
 
-        console.log(`\n  다음 단계: \x1b[33m/anpm-create\x1b[0m로 Space에 배포`)
-        console.log('  IDE를 재시작하면 슬래시 커맨드가 활성화됩니다.\n')
+        console.log(`\n  Next steps: Publish to Space with \x1b[33m/anpm-create\x1b[0m`)
+        console.log('  Restart your IDE to activate slash commands.\n')
       }
     })
 }

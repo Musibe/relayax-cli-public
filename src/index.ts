@@ -41,7 +41,7 @@ program
   .name('anpm')
   .description('anpm — the agent package manager')
   .version(pkg.version)
-  .option('--json', '구조화된 JSON 출력')
+  .option('--json', 'Structured JSON output')
 
 // ── Core commands ──
 registerInit(program)
@@ -79,23 +79,23 @@ registerChangelog(program)
 
 program
   .command('mcp')
-  .description('MCP 서버 모드로 실행합니다 (stdio transport)')
+  .description('Run in MCP server mode (stdio transport)')
   .action(async () => {
     await startMcpServer()
   })
 
-// 모든 명령 실행 전 마이그레이션 + 버전 표시
+// Pre-action hook: migration + version display
 program.hook('preAction', (_thisCommand, actionCommand) => {
   const isJson = program.opts().json ?? false
   const isMcp = actionCommand.name() === 'mcp'
 
-  // 마이그레이션은 항상 실행 (mcp 제외)
+  // Always run migration (except mcp)
   if (!isMcp) {
     migrateGlobalDir()
     migrateProjectDir(process.env.RELAY_PROJECT_PATH ?? process.cwd())
   }
 
-  // 버전 표시는 TTY + non-json만
+  // Show version for TTY + non-json only
   if (!isJson && !isMcp && process.stderr.isTTY) {
     process.stderr.write(`\x1b[2manpm v${pkg.version}\x1b[0m\n`)
   }

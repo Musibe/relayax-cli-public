@@ -9,7 +9,7 @@ import { checkGitInstalled, gitClone, gitDiff } from '../lib/git-operations.js'
 export function registerDiff(program: Command): void {
   program
     .command('diff <slug> <v1> <v2>')
-    .description('두 버전의 패키지를 비교합니다')
+    .description('Compare two versions of a package')
     .action(async (slugInput: string, v1: string, v2: string) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
@@ -22,11 +22,11 @@ export function registerDiff(program: Command): void {
         const ver2 = versions.find((v) => v.version === v2)
 
         if (!ver1 || !ver2) {
-          throw new Error(`버전을 찾을 수 없습니다. 사용 가능: ${versions.map((v) => v.version).join(', ')}`)
+          throw new Error(`Version not found. Available: ${versions.map((v) => v.version).join(', ')}`)
         }
 
         if (!json) {
-          console.log(`\n\x1b[1m${resolved.full}\x1b[0m v${v1} ↔ v${v2} 비교 중...\n`)
+          console.log(`\n\x1b[1m${resolved.full}\x1b[0m v${v1} ↔ v${v2} comparing...\n`)
         }
 
         // Use git diff if git_url is available
@@ -49,7 +49,7 @@ export function registerDiff(program: Command): void {
               if (diffOutput.trim()) {
                 console.log(diffOutput)
               } else {
-                console.log('  변경 사항이 없습니다.')
+                console.log('  No changes found.')
               }
             }
           } finally {
@@ -64,13 +64,13 @@ export function registerDiff(program: Command): void {
               v2: { version: v2, created_at: ver2.created_at, changelog: ver2.changelog },
             }))
           } else {
-            console.log(`  v${v1} (${new Date(ver1.created_at).toLocaleDateString('ko-KR')})`)
+            console.log(`  v${v1} (${new Date(ver1.created_at).toLocaleDateString('en-US')})`)
             if (ver1.changelog) console.log(`    ${ver1.changelog}`)
             console.log()
-            console.log(`  v${v2} (${new Date(ver2.created_at).toLocaleDateString('ko-KR')})`)
+            console.log(`  v${v2} (${new Date(ver2.created_at).toLocaleDateString('en-US')})`)
             if (ver2.changelog) console.log(`    ${ver2.changelog}`)
             console.log()
-            console.log(`\x1b[33m  git 기반 diff는 새로 배포된 에이전트에서만 지원됩니다.\x1b[0m`)
+            console.log(`\x1b[33m  Git-based diff is only supported for newly published agents.\x1b[0m`)
           }
         }
       } catch (err) {
@@ -78,7 +78,7 @@ export function registerDiff(program: Command): void {
         if (json) {
           console.error(JSON.stringify({ error: 'DIFF_FAILED', message }))
         } else {
-          console.error(`\x1b[31m오류: ${message}\x1b[0m`)
+          console.error(`\x1b[31mError: ${message}\x1b[0m`)
         }
         process.exit(1)
       }

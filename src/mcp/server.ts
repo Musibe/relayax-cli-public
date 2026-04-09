@@ -22,19 +22,19 @@ export function createMcpServer(): McpServer {
     { capabilities: { tools: {} } },
   )
 
-  // ═══ Detail Images — 에이전트 상세페이지 이미지 관리 ═══
+  // ═══ Detail Images — Agent detail page image management ═══
 
-  server.tool('relay_detail_upload', '에이전트 상세페이지 이미지를 업로드합니다. 폴더 내 이미지를 파일명 순으로 정렬하여 업로드합니다 (기존 이미지 전체 교체).', {
-    slug: z.string().describe('에이전트 slug'),
-    path: z.string().describe('이미지가 있는 폴더 경로 (PNG/GIF/JPEG/WebP)'),
+  server.tool('relay_detail_upload', 'Upload images to agent detail page. Images in the folder are sorted by filename and uploaded (replaces all existing images).', {
+    slug: z.string().describe('Agent slug'),
+    path: z.string().describe('Folder path containing images (PNG/GIF/JPEG/WebP)'),
   }, async ({ slug, path: dirPath }) => {
     try {
       const token = await getValidToken()
-      if (!token) return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.' })], isError: true }
+      if (!token) return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: 'Authentication required.' })], isError: true }
 
       const absPath = path.resolve(dirPath)
       if (!fs.existsSync(absPath) || !fs.statSync(absPath).isDirectory()) {
-        return { content: [jsonText({ error: `폴더를 찾을 수 없습니다: ${absPath}` })], isError: true }
+        return { content: [jsonText({ error: `Folder not found: ${absPath}` })], isError: true }
       }
 
       const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp']
@@ -43,7 +43,7 @@ export function createMcpServer(): McpServer {
         .sort()
 
       if (files.length === 0) {
-        return { content: [jsonText({ error: '폴더에 이미지 파일이 없습니다 (PNG/GIF/JPEG/WebP)' })], isError: true }
+        return { content: [jsonText({ error: 'No image files found in folder (PNG/GIF/JPEG/WebP)' })], isError: true }
       }
 
       const formData = new FormData()
@@ -64,7 +64,7 @@ export function createMcpServer(): McpServer {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        return { content: [jsonText({ error: (body as { message?: string }).message || `업로드 실패 (${res.status})` })], isError: true }
+        return { content: [jsonText({ error: (body as { message?: string }).message || `Upload failed (${res.status})` })], isError: true }
       }
 
       const result = await res.json() as { detail_images: string[]; count: number }
@@ -74,13 +74,13 @@ export function createMcpServer(): McpServer {
     }
   })
 
-  server.tool('relay_detail_list', '에이전트 상세페이지 이미지 목록을 조회합니다', {
-    slug: z.string().describe('에이전트 slug'),
+  server.tool('relay_detail_list', 'List agent detail page images', {
+    slug: z.string().describe('Agent slug'),
   }, async ({ slug }) => {
     try {
       const res = await fetch(`${API_URL}/api/agents/${slug}/detail-images`)
       if (!res.ok) {
-        return { content: [jsonText({ error: `조회 실패 (${res.status})` })], isError: true }
+        return { content: [jsonText({ error: `Fetch failed (${res.status})` })], isError: true }
       }
       const data = await res.json() as { detail_images: string[] }
       return { content: [jsonText({ detail_images: data.detail_images, count: data.detail_images.length })] }
@@ -89,12 +89,12 @@ export function createMcpServer(): McpServer {
     }
   })
 
-  server.tool('relay_detail_clear', '에이전트 상세페이지 이미지를 모두 삭제합니다', {
-    slug: z.string().describe('에이전트 slug'),
+  server.tool('relay_detail_clear', 'Delete all agent detail page images', {
+    slug: z.string().describe('Agent slug'),
   }, async ({ slug }) => {
     try {
       const token = await getValidToken()
-      if (!token) return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.' })], isError: true }
+      if (!token) return { content: [jsonText({ error: 'LOGIN_REQUIRED', message: 'Authentication required.' })], isError: true }
 
       const res = await fetch(`${API_URL}/api/agents/${slug}/detail-images`, {
         method: 'DELETE',
@@ -103,7 +103,7 @@ export function createMcpServer(): McpServer {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        return { content: [jsonText({ error: (body as { message?: string }).message || `삭제 실패 (${res.status})` })], isError: true }
+        return { content: [jsonText({ error: (body as { message?: string }).message || `Delete failed (${res.status})` })], isError: true }
       }
 
       const result = await res.json() as { deleted: number }

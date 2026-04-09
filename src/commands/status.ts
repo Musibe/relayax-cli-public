@@ -33,29 +33,29 @@ async function resolveUsername(token: string): Promise<string | undefined> {
 export function registerStatus(program: Command): void {
   program
     .command('status')
-    .description('현재 anpm 환경 상태를 표시합니다')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
+    .description('Show current anpm environment status')
+    .option('--project <dir>', 'Project root path (default: cwd, env: ANPM_PROJECT_PATH)')
     .action(async (opts: { project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = resolveProjectPath(opts.project)
 
-      // 1. 로그인 상태
+      // 1. Login status
       const token = await getValidToken()
       let username: string | undefined
       if (token) {
         username = await resolveUsername(token)
       }
 
-      // 2. 에이전트 감지
+      // 2. Agent detection
       const detected = detectAgentCLIs(projectPath)
       const primaryAgent = detected.length > 0 ? detected[0] : null
 
-      // 글로벌 커맨드 상태
+      // Global command status
       const hasGlobal = USER_COMMANDS.every((cmd) =>
         fs.existsSync(getGlobalCommandPath(cmd.id))
       )
 
-      // 로컬 Builder 커맨드 상태
+      // Local Builder command status
       let hasLocal = false
       if (primaryAgent) {
         const localDir = path.join(projectPath, primaryAgent.skillsDir, 'commands', 'anpm')
@@ -64,7 +64,7 @@ export function registerStatus(program: Command): void {
         )
       }
 
-      // 3. 에이전트 프로젝트 정보
+      // 3. Agent project info
       const relayYamlPath = path.join(projectPath, '.relay', 'relay.yaml')
       let project: StatusResult['project'] = null
 
@@ -90,7 +90,7 @@ export function registerStatus(program: Command): void {
       const agentEntries = getAgentStatusEntries()
       const unmanagedItems = findUnmanagedContent(projectPath)
 
-      // 5. 출력
+      // 5. Output
       if (json) {
         const result = {
           login: { authenticated: !!token, username },

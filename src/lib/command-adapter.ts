@@ -16,7 +16,7 @@ export interface ToolCommandAdapter {
 }
 
 /**
- * 로컬 어댑터 — 프로젝트 디렉토리 기준.
+ * Local adapter — relative to project directory.
  * {projectPath}/{skillsDir}/commands/anpm/{id}.md
  */
 export function createAdapter(tool: AITool): ToolCommandAdapter {
@@ -30,23 +30,23 @@ export function createAdapter(tool: AITool): ToolCommandAdapter {
 }
 
 /**
- * @deprecated getGlobalCommandPathForTool(skillsDir, commandId)를 사용하세요.
- * Claude Code 전용 경로. 멀티 에이전트 지원 시 ForTool 버전 사용 필요.
+ * @deprecated Use getGlobalCommandPathForTool(skillsDir, commandId) instead.
+ * Claude Code only path. Use ForTool version for multi-agent support.
  */
 export function getGlobalCommandPath(commandId: string): string {
   return getGlobalCommandPathForTool('.claude', commandId)
 }
 
 /**
- * @deprecated getGlobalCommandDirForTool(skillsDir)를 사용하세요.
- * Claude Code 전용 경로. 멀티 에이전트 지원 시 ForTool 버전 사용 필요.
+ * @deprecated Use getGlobalCommandDirForTool(skillsDir) instead.
+ * Claude Code only path. Use ForTool version for multi-agent support.
  */
 export function getGlobalCommandDir(): string {
   return getGlobalCommandDirForTool('.claude')
 }
 
 /**
- * 특정 AI 도구의 글로벌 커맨드 디렉토리.
+ * Global command directory for a specific AI tool.
  * ~/{skillsDir}/commands/anpm/
  */
 export function getGlobalCommandDirForTool(skillsDir: string): string {
@@ -54,41 +54,41 @@ export function getGlobalCommandDirForTool(skillsDir: string): string {
 }
 
 /**
- * 특정 AI 도구의 글로벌 커맨드 파일 경로.
+ * Global command file path for a specific AI tool.
  */
 export function getGlobalCommandPathForTool(skillsDir: string, commandId: string): string {
   return path.join(os.homedir(), skillsDir, 'commands', 'anpm', `${commandId}.md`)
 }
 
 /**
- * 커맨드 콘텐츠를 파일 형식으로 포맷.
+ * Format command content as a file.
  */
 export function formatCommandFile(content: CommandContent): string {
   return `---\ndescription: ${content.description}\n---\n\n${content.body}\n`
 }
 
-// ─── 프롬프트는 cli/src/prompts/*.md에서 관리 (SSOT) ───
+// ─── Prompts managed in cli/src/prompts/*.md (SSOT) ───
 
-// ─── User Commands (글로벌 설치) ───
+// ─── User Commands (global install) ───
 
 export const USER_COMMANDS: CommandContent[] = [
   {
     id: 'anpm-explore',
-    description: 'anpm 마켓플레이스를 탐색하고 프로젝트에 맞는 에이전트를 찾습니다',
+    description: 'Discover agents on the anpm marketplace and find ones that fit your project',
     body: EXPLORE_PROMPT,
   },
   {
     id: 'anpm-status',
-    description: '설치된 에이전트와 Organization 현황을 확인합니다',
-    body: `현재 설치된 에이전트와 소속 Organization 현황을 한눈에 보여줍니다.
+    description: 'Show installed agents and organization status',
+    body: `Shows installed agents and organization membership at a glance.
 
-## 실행 방법
+## How to run
 
-### 1. 설치된 에이전트 목록
+### 1. Installed agents list
 
-\`anpm list --json\` 명령어를 실행합니다.
+Run \`anpm list --json\`.
 
-**JSON 응답 구조:**
+**JSON response structure:**
 \`\`\`json
 {
   "installed": [
@@ -104,98 +104,98 @@ export const USER_COMMANDS: CommandContent[] = [
 }
 \`\`\`
 
-**각 에이전트를 아래 형식으로 표시:**
+**Display each agent as:**
 
-| 에이전트 | 버전 | 배포 | 설치일 |
+| Agent | Version | Scope | Installed |
 |---|---|---|---|
-| @author/agent-name | v1.2.0 | 글로벌 | 3/20 |
+| @author/agent-name | v1.2.0 | global | 3/20 |
 
-- \`deploy_scope\`가 \`"global"\` → 글로벌, \`"local"\` → 로컬, 없으면 → 미배치
-- \`org_slug\`가 있으면 \`[Org: slug]\` 표시
+- \`deploy_scope\`: \`"global"\` → global, \`"local"\` → local, missing → not deployed
+- If \`org_slug\` is present, show \`[Org: slug]\`
 
-### 2. Organization 목록
+### 2. Organization list
 
-\`anpm orgs list --json\` 명령어를 실행합니다.
+Run \`anpm orgs list --json\`.
 
-**JSON 응답 구조:**
+**JSON response structure:**
 \`\`\`json
 {
   "orgs": [
     {
       "slug": "my-org",
-      "name": "내 조직",
-      "description": "설명",
+      "name": "My Org",
+      "description": "Description",
       "role": "owner"
     }
   ]
 }
 \`\`\`
 
-**표시:**
-- \`role\`: owner → 오너, admin → 관리자, builder → 빌더, member → 멤버
-- Org 조회 실패해도 설치된 에이전트 목록은 정상 표시합니다 (로컬 데이터).
+**Display:**
+- \`role\`: owner, admin, builder, member
+- If org fetch fails, still show installed agents (local data).
 
-### 3. Org 에이전트 목록 (옵션)
-- \`--org <slug>\` 인자가 있으면: \`anpm list --org <org-slug> --json\`으로 해당 Organization의 에이전트 목록도 보여줍니다.
+### 3. Org agent list (optional)
+- If \`--org <slug>\` argument is provided: also run \`anpm list --org <org-slug> --json\` to show that organization's agents.
 
-### 4. 안내
-- 설치된 에이전트가 없으면 \`/anpm-explore\`로 에이전트를 탐색해보라고 안내합니다.
-- Org가 있으면 활용법을 안내합니다:
-  - Org 에이전트 설치: \`anpm install @<org-slug>/<agent>\`
-  - Org 관리: www.anpm.io/orgs/<slug>
+### 4. Guidance
+- If no agents are installed, suggest exploring with \`/anpm-explore\`.
+- If orgs exist, show usage tips:
+  - Install org agent: \`anpm install @<org-slug>/<agent>\`
+  - Manage org: www.anpm.io/orgs/<slug>
 
-## 예시
+## Example
 
-사용자: /anpm-status
-→ anpm list --json 실행
-→ anpm orgs list --json 실행 (병렬 가능)
+User: /anpm-status
+→ Run anpm list --json
+→ Run anpm orgs list --json (can run in parallel)
 
-**설치된 에이전트 (2개)**
+**Installed agents (2)**
 
-| 에이전트 | 버전 | 배포 | 설치일 |
+| Agent | Version | Scope | Installed |
 |---|---|---|---|
-| @alice/doc-writer | v1.2.0 | 글로벌 | 3/20 |
-| @bob/code-reviewer | v0.5.1 | 로컬 | 3/15 |
+| @alice/doc-writer | v1.2.0 | global | 3/20 |
+| @bob/code-reviewer | v0.5.1 | local | 3/15 |
 
-**내 Organization (2개)**
-- acme-corp — Acme Corp (소유자)
-- dev-guild — Dev Guild (멤버)
+**My Organizations (2)**
+- acme-corp — Acme Corp (owner)
+- dev-guild — Dev Guild (member)
 
-사용자: /anpm-status --org acme-corp
-→ 위 정보 + \`anpm list --org acme-corp --json\` 실행
-→ acme-corp Organization에서 설치 가능한 에이전트 목록 추가 표시`,
+User: /anpm-status --org acme-corp
+→ Above info + run \`anpm list --org acme-corp --json\`
+→ Show available agents from the acme-corp organization`,
   },
   {
     id: 'anpm-uninstall',
-    description: '설치된 에이전트를 삭제합니다',
-    body: `설치된 에이전트를 제거합니다. CLI가 패키지와 배치된 파일을 모두 정리합니다.
+    description: 'Remove an installed agent',
+    body: `Remove an installed agent. The CLI cleans up both the package and deployed files.
 
-## 실행 방법
+## How to run
 
-1. \`anpm uninstall <@author/slug> --json\` 명령어를 실행합니다.
-2. CLI가 자동으로 처리하는 것:
-   - \`.anpm/agents/\` 패키지 삭제
-   - \`deployed_files\`에 기록된 배치 파일 삭제 (에이전트 설정 디렉토리 내)
-   - 빈 상위 디렉토리 정리
-   - installed.json에서 항목 제거 (글로벌/로컬 양쪽)
-3. 삭제 결과를 보여줍니다 (에이전트 이름, 제거된 파일 수).
+1. Run \`anpm uninstall <@author/slug> --json\`.
+2. The CLI automatically handles:
+   - Removing the \`.anpm/agents/\` package
+   - Removing deployed files recorded in \`deployed_files\` (within agent config directories)
+   - Cleaning up empty parent directories
+   - Removing the entry from installed.json (both global and local)
+3. Shows the result (agent name, number of files removed).
 
-## 예시
+## Example
 
-사용자: /anpm-uninstall @alice/doc-writer
-→ anpm uninstall @alice/doc-writer --json 실행
-→ "✓ @alice/doc-writer 삭제 완료 (12개 파일 제거)"`,
+User: /anpm-uninstall @alice/doc-writer
+→ Run anpm uninstall @alice/doc-writer --json
+→ "✓ @alice/doc-writer removed (12 files deleted)"`,
   },
   {
     id: 'anpm-create',
-    description: '에이전트를 만들거나 업데이트하여 anpm에 배포합니다',
+    description: 'Create or update an agent and publish to anpm',
     body: CREATE_PROMPT,
   },
 ]
 
-// ─── Builder Commands (로컬 설치) ───
-// anpm-publish가 글로벌로 승격되어 현재 비어있음.
-// anpm init --auto만 실행하면 모든 커맨드가 한번에 업데이트됨.
+// ─── Builder Commands (local install) ───
+// anpm-publish has been promoted to global, so this is currently empty.
+// Running anpm init --auto updates all commands at once.
 
 export const BUILDER_COMMANDS: CommandContent[] = []
 

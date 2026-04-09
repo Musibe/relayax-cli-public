@@ -51,8 +51,8 @@ const SUCCESS_HTML = `<!DOCTYPE html>
 <html><head><title>anpm</title></head>
 <body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f6f5f2;color:#111318">
 <div style="text-align:center">
-<h2>로그인 완료!</h2>
-<p>터미널로 돌아가세요. 이 창은 닫아도 됩니다.</p>
+<h2>Login complete!</h2>
+<p>Return to your terminal. You can close this window.</p>
 <script>setTimeout(()=>window.close(),2000)</script>
 </div>
 </body></html>`
@@ -61,7 +61,7 @@ function waitForToken(port: number): Promise<LoginResult> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       server.close()
-      reject(new Error('로그인 시간이 초과되었습니다 (5분)'))
+      reject(new Error('Login timed out (5 minutes)'))
     }, 5 * 60 * 1000)
 
     const server = http.createServer(async (req, res) => {
@@ -85,7 +85,7 @@ function waitForToken(port: number): Promise<LoginResult> {
         if (token) {
           resolve({ token, refresh_token, expires_at })
         } else {
-          reject(new Error('토큰이 전달되지 않았습니다'))
+          reject(new Error('No token received'))
         }
       } else {
         res.writeHead(404)
@@ -106,7 +106,7 @@ function findAvailablePort(): Promise<number> {
         const port = addr.port
         server.close(() => resolve(port))
       } else {
-        server.close(() => reject(new Error('포트를 찾을 수 없습니다')))
+        server.close(() => reject(new Error('Could not find an available port')))
       }
     })
   })
@@ -120,9 +120,9 @@ async function loginWithBrowser(json: boolean): Promise<LoginResult> {
 
   if (!json) {
     if (opened) {
-      console.error(`브라우저에서 로그인 페이지를 엽니다...`)
+      console.error(`Opening login page in browser...`)
     } else {
-      console.error(`브라우저를 자동으로 열 수 없습니다. 아래 URL을 브라우저에서 직접 열어주세요:\n`)
+      console.error(`Could not open browser automatically. Open this URL in your browser:\n`)
       console.error(`  ${loginUrl}\n`)
     }
   }
@@ -133,7 +133,7 @@ async function loginWithBrowser(json: boolean): Promise<LoginResult> {
 async function loginWithDevice(json: boolean): Promise<LoginResult> {
   const res = await fetch(`${API_URL}/api/auth/device/request`, { method: 'POST' })
   if (!res.ok) {
-    throw new Error('Device code 발급에 실패했습니다')
+    throw new Error('Failed to request device code')
   }
 
   const { device_code, user_code, verification_url, expires_in } = await res.json() as {
@@ -146,9 +146,9 @@ async function loginWithDevice(json: boolean): Promise<LoginResult> {
   if (json) {
     console.error(JSON.stringify({ status: 'waiting', verification_url, user_code, expires_in }))
   } else {
-    console.error(`\n아래 URL에서 코드를 입력하세요:\n`)
+    console.error(`\nEnter the code at this URL:\n`)
     console.error(`  ${verification_url}`)
-    console.error(`\n  코드: \x1b[1m${user_code}\x1b[0m\n`)
+    console.error(`\n  Code: \x1b[1m${user_code}\x1b[0m\n`)
   }
 
   openBrowser(`${verification_url}?user_code=${user_code}`)
@@ -182,18 +182,18 @@ async function loginWithDevice(json: boolean): Promise<LoginResult> {
     }
 
     if (data.status === 'expired') {
-      throw new Error('코드가 만료되었습니다. 다시 시도하세요.')
+      throw new Error('Code expired. Please try again.')
     }
 
     // pending — continue polling
   }
 
-  throw new Error('로그인 시간이 초과되었습니다 (5분)')
+  throw new Error('Login timed out (5 minutes)')
 }
 
 /**
- * 대화형 로그인 플로우 실행 (auto-login에서 호출).
- * 브라우저에서 로그인 페이지를 열고 토큰을 받아 저장.
+ * Run interactive login flow (called from auto-login).
+ * Opens login page in browser and saves the received token.
  */
 export async function runLogin(): Promise<void> {
   ensureGlobalAnpmDir()
@@ -204,15 +204,15 @@ export async function runLogin(): Promise<void> {
     ...(loginResult.refresh_token ? { refresh_token: loginResult.refresh_token } : {}),
     ...(loginResult.expires_at ? { expires_at: loginResult.expires_at } : {}),
   })
-  console.log(`\x1b[32m✓ 로그인 완료\x1b[0m`)
+  console.log(`\x1b[32m✓ Logged in\x1b[0m`)
 }
 
 export function registerLogin(program: Command): void {
   program
     .command('login')
-    .description('anpm 계정에 로그인합니다')
-    .option('--token <token>', '직접 토큰 입력 (브라우저 없이)')
-    .option('--device', 'Device code 방식으로 로그인 (샌드박스/원격 환경용)')
+    .description('Log in to your anpm account')
+    .option('--token <token>', 'Provide token directly (no browser)')
+    .option('--device', 'Login via device code (for sandbox/remote environments)')
     .action(async (opts: { token?: string; device?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
@@ -232,14 +232,14 @@ export function registerLogin(program: Command): void {
           refreshToken = loginResult.refresh_token
           expiresAt = loginResult.expires_at
         } catch (err) {
-          const msg = err instanceof Error ? err.message : '로그인 실패'
+          const msg = err instanceof Error ? err.message : 'Login failed'
           reportCliError('login', 'LOGIN_FAILED', msg)
           if (json) {
-            console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: opts.device ? '다시 시도하세요.' : 'anpm login --device를 시도하세요.' }))
+            console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: opts.device ? 'Please try again.' : 'Try anpm login --device.' }))
           } else {
-            console.error(`\x1b[31m오류: ${msg}\x1b[0m`)
+            console.error(`\x1b[31mError: ${msg}\x1b[0m`)
             if (!opts.device) {
-              console.error(`\n\x1b[33m팁: 브라우저 콜백이 안 되는 환경이라면 anpm login --device를 시도하세요.\x1b[0m`)
+              console.error(`\n\x1b[33mTip: If browser callback doesn't work, try anpm login --device.\x1b[0m`)
             }
           }
           process.exit(1)
@@ -255,15 +255,15 @@ export function registerLogin(program: Command): void {
 
       const result = {
         status: 'ok',
-        message: '로그인 성공',
+        message: 'Login successful',
         ...(user ? { email: user.email } : {}),
       }
 
       if (json) {
         console.log(JSON.stringify(result))
       } else {
-        console.log(`\x1b[32m✓ 로그인 완료\x1b[0m`)
-        if (user?.email) console.log(`  계정: \x1b[36m${user.email}\x1b[0m`)
+        console.log(`\x1b[32m✓ Logged in\x1b[0m`)
+        if (user?.email) console.log(`  Account: \x1b[36m${user.email}\x1b[0m`)
       }
     })
 }

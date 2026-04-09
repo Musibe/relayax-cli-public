@@ -287,8 +287,8 @@ function detectAgentDetails(agentDir: string, requires?: Requires): AgentDetail[
 }
 
 /**
- * 에이전트 진입점 커맨드(commands/{author}-{name}.md)를 생성한다.
- * root SKILL.md를 대체하여 에이전트의 얼굴 역할을 한다.
+ * Generate agent entry point command (commands/{author}-{name}.md).
+ * Replaces root SKILL.md as the agent's entry point.
  */
 function generateEntryCommand(
   config: { slug: string; name: string; description: string; version: string },
@@ -317,7 +317,7 @@ function generateEntryCommand(
 
   // Skills
   if (skills.length > 0) {
-    lines.push('### 사용 가능한 스킬')
+    lines.push('### Available skills')
     lines.push('')
     for (const s of skills) {
       lines.push(`- **${s.name}**: ${s.description}`)
@@ -327,7 +327,7 @@ function generateEntryCommand(
 
   // Commands
   if (commands.length > 0) {
-    lines.push('### 사용 가능한 커맨드')
+    lines.push('### Available commands')
     lines.push('')
     for (const c of commands) {
       lines.push(`- **/${c.name}**: ${c.description}`)
@@ -335,9 +335,9 @@ function generateEntryCommand(
     lines.push('')
   }
 
-  lines.push('### 시작')
+  lines.push('### Getting started')
   lines.push('')
-  lines.push('원하는 작업을 말하거나 위 커맨드를 직접 실행하세요.')
+  lines.push('Tell me what you need or run any of the commands above.')
   lines.push('')
 
   return lines.join('\n')
@@ -381,9 +381,9 @@ function extractCloudConfig(config: RelayYaml): { cloud_config?: PublishMetadata
 }
 
 /**
- * long_description을 결정한다.
- * 1. relay.yaml에 있으면 사용
- * 2. README.md가 있으면 fallback
+ * Resolve long_description.
+ * 1. Use from relay.yaml if present
+ * 2. Fall back to README.md
  */
 function resolveLongDescription(agentDir: string, yamlValue?: string): string | undefined {
   if (yamlValue) return yamlValue
@@ -431,7 +431,7 @@ export async function publishToApi(
   const body = await res.json() as Record<string, unknown>
 
   if (!res.ok) {
-    const msg = typeof body.message === 'string' ? body.message : `서버 오류 (${res.status})`
+    const msg = typeof body.message === 'string' ? body.message : `Server error (${res.status})`
     throw new Error(msg)
   }
 
@@ -441,16 +441,16 @@ export async function publishToApi(
 export function registerPublish(program: Command): void {
   program
     .command('publish')
-    .description('현재 에이전트 패키지를 Space에 배포합니다 (anpm.yaml 필요)')
-    .option('--token <token>', '인증 토큰')
-    .option('--space <slug>', '배포할 Space 지정')
-    .option('--org <slug>', 'Organization slug 지정')
-    .option('--no-org', '개인 계정으로 배포 (Organization 무시)')
-    .option('--version <version>', '배포 버전 지정 (anpm.yaml 업데이트)')
-    .option('--patch', 'patch 버전 범프')
-    .option('--minor', 'minor 버전 범프')
-    .option('--major', 'major 버전 범프')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
+    .description('Publish current agent package to the registry (anpm.yaml required)')
+    .option('--token <token>', 'Auth token')
+    .option('--space <slug>', 'Target Space')
+    .option('--org <slug>', 'Organization slug')
+    .option('--no-org', 'Publish to personal account (skip org)')
+    .option('--version <version>', 'Set version (updates anpm.yaml)')
+    .option('--patch', 'Bump patch version')
+    .option('--minor', 'Bump minor version')
+    .option('--major', 'Bump major version')
+    .option('--project <dir>', 'Project root path (default: cwd, env: ANPM_PROJECT_PATH)')
     .action(async (opts: { token?: string; space?: string; org?: string; noOrg?: boolean; version?: string; patch?: boolean; minor?: boolean; major?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const agentDir = resolveProjectPath(opts.project)
@@ -464,9 +464,9 @@ export function registerPublish(program: Command): void {
       if (isTTY) {
         const cliUpdate = await checkCliVersion(true)
         if (cliUpdate) {
-          console.error(`\n\x1b[33m⚠ anpm v${cliUpdate.latest}이 있습니다\x1b[0m (현재 v${cliUpdate.current})`)
-          console.error('  최신 버전에서는 설치자에게 자동 업데이트 알림이 지원됩니다.')
-          console.error(`  업데이트: \x1b[36mnpm update -g anpm-io\x1b[0m\n`)
+          console.error(`\n\x1b[33m⚠ anpm v${cliUpdate.latest} available\x1b[0m (current v${cliUpdate.current})`)
+          console.error('  Latest version supports auto-update notifications for installers.')
+          console.error(`  Update: \x1b[36mnpm update -g anpm-io\x1b[0m\n`)
         }
       }
 
@@ -476,8 +476,8 @@ export function registerPublish(program: Command): void {
           reportCliError('publish', 'NOT_INITIALIZED', 'relay.yaml missing')
           console.error(JSON.stringify({
             error: 'NOT_INITIALIZED',
-            message: '.relay/relay.yaml이 없습니다. 먼저 `anpm create`를 실행하세요.',
-            fix: 'anpm create 또는 anpm.yaml을 생성하세요.',
+            message: '.relay/relay.yaml not found. Run `anpm create` first.',
+            fix: 'Run anpm create or create anpm.yaml manually.',
           }))
           process.exit(1)
         }
@@ -489,42 +489,42 @@ export function registerPublish(program: Command): void {
         const dirName = path.basename(agentDir)
         const defaultSlug = dirName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
-        console.error('\n\x1b[36m릴레이 에이전트 패키지를 초기화합니다.\x1b[0m')
-        console.error('.relay/relay.yaml을 생성하기 위해 몇 가지 정보를 입력해주세요.\n')
+        console.error('\n\x1b[36mInitializing agent package.\x1b[0m')
+        console.error('Provide some info to generate .relay/relay.yaml.\n')
 
         const name = await promptInput({
-          message: '에이전트 이름:',
+          message: 'Agent name:',
           default: dirName,
         })
 
         const slug = await promptInput({
-          message: '슬러그 (URL에 사용되는 고유 식별자):',
+          message: 'Slug (unique URL identifier):',
           default: defaultSlug,
         })
 
         const description = await promptInput({
-          message: '에이전트 설명 (필수):',
-          validate: (v) => v.trim().length > 0 ? true : '설명을 입력해주세요.',
+          message: 'Agent description (required):',
+          validate: (v) => v.trim().length > 0 ? true : 'Please enter a description.',
         })
 
         const tagsRaw = await promptInput({
-          message: '태그 (쉼표로 구분, 선택):',
+          message: 'Tags (comma-separated, optional):',
           default: '',
         })
 
         const visibility = await promptSelect<'public' | 'private' | 'internal'>({
-          message: '공개 범위:',
+          message: 'Visibility:',
           choices: [
-            { name: '공개 — 누구나 검색 및 설치 가능', value: 'public' },
-            { name: '비공개 — 허가 코드 등록자만 사용 가능', value: 'private' },
-            { name: '내부 — 조직 내의 누구나 사용 가능', value: 'internal' },
+            { name: 'Public — anyone can discover and install', value: 'public' },
+            { name: 'Private — only authorized users with an access code', value: 'private' },
+            { name: 'Internal — anyone in the organization', value: 'internal' },
           ],
         })
 
         if (visibility === 'private') {
-          console.error('\x1b[2m💡 비공개 에이전트는 웹 대시보드에서 허가된 사용자를 관리하세요: www.anpm.io/dashboard\x1b[0m')
+          console.error('\x1b[2m💡 Manage authorized users for private agents at: www.anpm.io/dashboard\x1b[0m')
         } else if (visibility === 'internal') {
-          console.error('\x1b[2m💡 내부 에이전트는 조직 멤버 전체가 사용할 수 있습니다: www.anpm.io/dashboard/agents\x1b[0m')
+          console.error('\x1b[2m💡 Internal agents are available to all org members: www.anpm.io/dashboard/agents\x1b[0m')
         }
         console.error('')
 
@@ -543,7 +543,7 @@ export function registerPublish(program: Command): void {
         }
         fs.mkdirSync(relayDir, { recursive: true })
         fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-        console.error(`\n\x1b[32m✓ .relay/relay.yaml이 생성되었습니다.\x1b[0m\n`)
+        console.error(`\n\x1b[32m✓ .relay/relay.yaml created.\x1b[0m\n`)
       }
 
       // Parse relay.yaml
@@ -554,8 +554,8 @@ export function registerPublish(program: Command): void {
         reportCliError('publish', 'INVALID_CONFIG', 'missing name/slug/description')
         console.error(JSON.stringify({
           error: 'INVALID_CONFIG',
-          message: 'anpm.yaml에 name, slug, description이 필요합니다.',
-          fix: 'anpm.yaml에 name, slug, description을 확인하세요.',
+          message: 'anpm.yaml requires name, slug, and description.',
+          fix: 'Check name, slug, and description in anpm.yaml.',
         }))
         process.exit(1)
       }
@@ -582,7 +582,7 @@ export function registerPublish(program: Command): void {
         yamlData.version = newVersion
         fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
         if (!json) {
-          console.error(`  → anpm.yaml에 version: ${newVersion} 저장됨\n`)
+          console.error(`  → Saved version: ${newVersion} to anpm.yaml\n`)
         }
       } else if (isTTY) {
         const { select: promptVersion } = await import('@inquirer/prompts')
@@ -592,12 +592,12 @@ export function registerPublish(program: Command): void {
         const bumpMajor = `${major + 1}.0.0`
 
         const newVersion = await promptVersion<string>({
-          message: `버전 (현재 v${config.version}):`,
+          message: `Version (current v${config.version}):`,
           choices: [
-            { name: `v${bumpPatch} — patch (버그 수정)`, value: bumpPatch },
-            { name: `v${bumpMinor} — minor (기능 추가)`, value: bumpMinor },
-            { name: `v${bumpMajor} — major (큰 변경)`, value: bumpMajor },
-            { name: `v${config.version} — 유지`, value: config.version },
+            { name: `v${bumpPatch} — patch (bug fix)`, value: bumpPatch },
+            { name: `v${bumpMinor} — minor (new feature)`, value: bumpMinor },
+            { name: `v${bumpMajor} — major (breaking change)`, value: bumpMajor },
+            { name: `v${config.version} — keep`, value: config.version },
           ],
         })
 
@@ -606,11 +606,11 @@ export function registerPublish(program: Command): void {
           const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
           yamlData.version = newVersion
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-          console.error(`  → anpm.yaml에 version: ${newVersion} 저장됨\n`)
+          console.error(`  → Saved version: ${newVersion} to anpm.yaml\n`)
         }
       }
 
-      // Auto-sync: relay.yaml의 contents에 정의된 소스를 .relay/에 동기화
+      // Auto-sync: sync contents defined in relay.yaml to .relay/
       try {
         const yamlContent = fs.readFileSync(relayYamlPath, 'utf-8')
         const yamlConfig = yaml.load(yamlContent) as Record<string, unknown>
@@ -623,15 +623,15 @@ export function registerPublish(program: Command): void {
             syncContentsToRelay(contents as Parameters<typeof syncContentsToRelay>[0], contentsDiff as Parameters<typeof syncContentsToRelay>[1], relayDir, agentDir)
             if (!json) {
               const changedNames = contentsDiff.filter((d: { status: string }) => d.status === 'modified').map((d: { name: string }) => d.name)
-              console.error(`\x1b[36m⚙ 소스 동기화:\x1b[0m ${changedNames.join(', ')}`)
+              console.error(`\x1b[36m⚙ Source sync:\x1b[0m ${changedNames.join(', ')}`)
             }
           }
         }
       } catch {
-        // sync 실패는 non-fatal — 기존 .relay/ 내용으로 publish 진행
+        // sync failure is non-fatal — continue with existing .relay/ contents
       }
 
-      // Validate structure (콘텐츠는 .relay/ 안에 있음)
+      // Validate structure (contents are in .relay/)
       const hasDirs = VALID_DIRS.some((d) => {
         const dirPath = path.join(relayDir, d)
         if (!fs.existsSync(dirPath)) return false
@@ -641,8 +641,8 @@ export function registerPublish(program: Command): void {
         reportCliError('publish', 'EMPTY_PACKAGE', 'no content dirs found')
         console.error(JSON.stringify({
           error: 'EMPTY_PACKAGE',
-          message: '.relay/ 안에 skills/, agents/, rules/, commands/ 중 하나 이상에 파일이 있어야 합니다.',
-          fix: '.relay/ 안에 skills/, agents/, rules/, commands/ 중 하나에 파일을 추가하세요.',
+          message: '.relay/ must contain files in at least one of: skills/, agents/, rules/, commands/.',
+          fix: 'Add files to one of: .relay/skills/, .relay/agents/, .relay/rules/, .relay/commands/.',
         }))
         process.exit(1)
       }
@@ -653,8 +653,8 @@ export function registerPublish(program: Command): void {
         reportCliError('publish', 'NO_TOKEN', 'auth required')
         console.error(JSON.stringify({
           error: 'NO_TOKEN',
-          message: '인증이 필요합니다. `anpm login`을 먼저 실행하세요.',
-          fix: 'anpm login 실행 후 재시도하세요.',
+          message: 'Authentication required. Run `anpm login` first.',
+          fix: 'Run anpm login and try again.',
         }))
         process.exit(1)
       }
@@ -676,7 +676,7 @@ export function registerPublish(program: Command): void {
         if (skipOrg) {
           // Personal deployment — no org
           if (!json) {
-            console.error('\x1b[2m  개인 계정으로 배포합니다.\x1b[0m\n')
+            console.error('\x1b[2m  Publishing to personal account.\x1b[0m\n')
           }
         } else if (explicitOrgSlug) {
           const matched = orgs.find((o) => o.slug === explicitOrgSlug)
@@ -690,12 +690,12 @@ export function registerPublish(program: Command): void {
             if (json) {
               console.error(JSON.stringify({
                 error: 'INVALID_ORG',
-                message: `Organization '${explicitOrgSlug}'를 찾을 수 없습니다.`,
-                fix: `사용 가능한 Org: ${orgs.map((o) => o.slug).join(', ')}`,
+                message: `Organization '${explicitOrgSlug}' not found.`,
+                fix: `Available orgs: ${orgs.map((o) => o.slug).join(', ')}`,
                 options: orgs.map((o) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
               }))
             } else {
-              console.error(`Organization '${explicitOrgSlug}'를 찾을 수 없습니다.`)
+              console.error(`Organization '${explicitOrgSlug}' not found.`)
             }
             reportCliError('publish', 'INVALID_ORG', `org:${explicitOrgSlug}`)
             process.exit(1)
@@ -703,7 +703,7 @@ export function registerPublish(program: Command): void {
         } else if (isTTY) {
           if (orgs.length === 0) {
             // No orgs — publish without org_id
-            console.error('\x1b[33m⚠ 소속 Organization이 없습니다. 개인 계정으로 배포합니다.\x1b[0m\n')
+            console.error('\x1b[33m⚠ No organizations found. Publishing to personal account.\x1b[0m\n')
           } else if (orgs.length === 1) {
             // Only one Org — auto-select
             selectedOrgId = orgs[0].id
@@ -718,7 +718,7 @@ export function registerPublish(program: Command): void {
               slug: o.slug,
             }))
             const chosenId = await selectOrg<string>({
-              message: '어떤 Organization에 배포할까요?',
+              message: 'Which organization to publish to?',
               choices: orgChoices.map((c) => ({ name: c.name, value: c.value })),
             })
             const chosen = orgChoices.find((c) => c.value === chosenId)
@@ -728,14 +728,14 @@ export function registerPublish(program: Command): void {
             console.error(`  → Organization: ${chosenLabel}\n`)
           }
         } else if (orgs.length > 0 && json) {
-          // --json 모드 + Org 있음: 에이전트가 선택할 수 있도록 에러 반환
+          // --json mode + Org available: return error so agent can choose
           reportCliError('publish', 'MISSING_ORG', `${orgs.length} orgs, none selected`)
           console.error(JSON.stringify({
             error: 'MISSING_ORG',
-            message: '배포 대상을 선택하세요.',
-            fix: `개인 배포: anpm publish --no-org --json / Org 배포: anpm publish --org <slug> --json`,
+            message: 'Select publish target.',
+            fix: `Personal: anpm publish --no-org --json / Org: anpm publish --org <slug> --json`,
             options: [
-              { value: '__personal__', label: '개인 계정으로 배포' },
+              { value: '__personal__', label: 'Publish to personal account' },
               ...orgs.map((o) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
             ],
           }))
@@ -746,50 +746,50 @@ export function registerPublish(program: Command): void {
           selectedOrgSlug = orgs[0].slug
         }
       } catch {
-        // Org 조회 실패 시 무시하고 계속 진행
+        // Ignore org fetch failure and continue
       }
 
       // Visibility default
       const defaultVisibility: 'public' | 'private' = 'public'
 
       // Visibility validation: must be explicitly set
-      // internal은 org가 선택된 경우에만 옵션으로 표시
+      // internal is only shown when org is selected
       const hasOrg = !!selectedOrgId
       if (!config.visibility) {
         if (isTTY) {
           const { select: promptSelect } = await import('@inquirer/prompts')
-          console.error(`\n\x1b[33m⚠ anpm.yaml에 visibility가 설정되지 않았습니다.\x1b[0m  (기본값: ${defaultVisibility === 'public' ? '공개' : '비공개'})`)
+          console.error(`\n\x1b[33m⚠ visibility not set in anpm.yaml.\x1b[0m  (default: ${defaultVisibility})`)
 
           const visChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = hasOrg
             ? [
               {
-                name: `공개 — 조직 밖의 누구나 사용 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+                name: `Public — anyone outside the org can use${defaultVisibility === 'public' ? '  ✓ recommended' : ''}`,
                 value: 'public',
               },
               {
-                name: '비공개 — 조직 내의 허가된 사용자만 사용 가능',
+                name: 'Private — only authorized org members',
                 value: 'private',
               },
             ]
             : [
               {
-                name: `공개 — 누구나 검색 및 설치 가능${defaultVisibility === 'public' ? '  ✓ 추천' : ''}`,
+                name: `Public — anyone can discover and install${defaultVisibility === 'public' ? '  ✓ recommended' : ''}`,
                 value: 'public',
               },
               {
-                name: '비공개 — 허가 코드 등록자만 사용 가능',
+                name: 'Private — only authorized users with an access code',
                 value: 'private',
               },
             ]
           if (hasOrg) {
             visChoices.push({
-              name: '내부 — 조직 내의 누구나 사용 가능',
+              name: 'Internal — anyone in the organization',
               value: 'internal',
             })
           }
 
           config.visibility = await promptSelect<'public' | 'private' | 'internal'>({
-            message: '공개 범위를 선택하세요:',
+            message: 'Select visibility:',
             choices: visChoices,
             default: defaultVisibility,
           })
@@ -797,71 +797,71 @@ export function registerPublish(program: Command): void {
           const yamlData = yaml.load(yamlContent) as Record<string, unknown>
           yamlData.visibility = config.visibility
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-          console.error(`  → anpm.yaml에 visibility: ${config.visibility} 저장됨\n`)
+          console.error(`  → Saved visibility: ${config.visibility} to anpm.yaml\n`)
         } else {
           reportCliError('publish', 'MISSING_VISIBILITY', 'visibility not set in relay.yaml')
           const visOptions: { value: string; label: string }[] = hasOrg
             ? [
-              { value: 'public', label: '공개 — 조직 밖의 누구나 사용 가능' },
-              { value: 'private', label: '비공개 — 조직 내의 허가된 사용자만 사용 가능' },
+              { value: 'public', label: 'Public — anyone outside the org can use' },
+              { value: 'private', label: 'Private — only authorized org members' },
             ]
             : [
-              { value: 'public', label: '공개 — 누구나 검색 및 설치 가능' },
-              { value: 'private', label: '비공개 — 허가 코드 등록자만 사용 가능' },
+              { value: 'public', label: 'Public — anyone can discover and install' },
+              { value: 'private', label: 'Private — only authorized users with an access code' },
             ]
           if (hasOrg) {
-            visOptions.push({ value: 'internal', label: '내부 — 조직 내의 누구나 사용 가능' })
+            visOptions.push({ value: 'internal', label: 'Internal — anyone in the organization' })
           }
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
-            message: 'anpm.yaml에 visibility를 설정해주세요.',
+            message: 'Please set visibility in anpm.yaml.',
             options: visOptions,
-            fix: 'relay.yaml의 visibility 필드를 위 옵션 중 하나로 설정하세요.',
+            fix: 'Set the visibility field in relay.yaml to one of the options above.',
           }))
           process.exit(1)
         }
       }
 
-      // Confirm visibility before publish (재배포 시 변경 기회 제공)
+      // Confirm visibility before publish (allow change on re-publish)
       // Skip when a bump flag is present and visibility is already set in relay.yaml
       if (isTTY && !hasBumpFlag) {
         const { select: promptConfirmVis } = await import('@inquirer/prompts')
         const visLabelMap: Record<string, string> = {
-          public: '공개',
-          private: '비공개',
-          internal: '내부',
+          public: 'public',
+          private: 'private',
+          internal: 'internal',
         }
         const currentVisLabel = visLabelMap[config.visibility ?? 'public'] ?? config.visibility
 
         const currentVis = config.visibility ?? defaultVisibility
         const confirmVisChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = [
           {
-            name: `${currentVisLabel} 유지`,
+            name: `Keep ${currentVisLabel}`,
             value: currentVis as 'public' | 'private' | 'internal',
           },
         ]
-        // 나머지 옵션 추가 (현재 값 제외)
+        // Add remaining options (excluding current value)
         if (currentVis !== 'public') {
           confirmVisChoices.push({
-            name: hasOrg ? '공개 — 조직 밖의 누구나 사용 가능' : '공개 — 누구나 검색 및 설치 가능',
+            name: hasOrg ? 'Public — anyone outside the org can use' : 'Public — anyone can discover and install',
             value: 'public',
           })
         }
         if (currentVis !== 'private') {
           confirmVisChoices.push({
-            name: hasOrg ? '비공개 — 조직 내의 허가된 사용자만 사용 가능' : '비공개 — 허가 코드 등록자만 사용 가능',
+            name: hasOrg ? 'Private — only authorized org members' : 'Private — only authorized users with an access code',
             value: 'private',
           })
         }
         if (hasOrg && currentVis !== 'internal') {
           confirmVisChoices.push({
-            name: '내부 — 조직 내의 누구나 사용 가능',
+            name: 'Internal — anyone in the organization',
             value: 'internal',
           })
         }
 
         const newVisibility = await promptConfirmVis<'public' | 'private' | 'internal'>({
-          message: `공개 범위: ${currentVisLabel}`,
+          message: `Visibility: ${currentVisLabel}`,
           choices: confirmVisChoices,
           default: currentVis,
         })
@@ -871,21 +871,21 @@ export function registerPublish(program: Command): void {
           const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
           yamlData.visibility = config.visibility
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-          console.error(`  → anpm.yaml에 visibility: ${config.visibility} 저장됨 (${visLabelMap[config.visibility]})\n`)
+          console.error(`  → Saved visibility: ${config.visibility} (${visLabelMap[config.visibility]}) to anpm.yaml\n`)
         }
       }
 
-      // ── Requires 자동 감지 + 제안 ──
+      // ── Auto-detect + suggest requires ──
       if (isTTY && !json) {
         const suggestions = suggestRequires(relayDir, config.requires)
         if (suggestions.length > 0) {
-          console.error('\n\x1b[33m⚡ requires에 빠진 항목이 감지되었습니다:\x1b[0m')
+          console.error('\n\x1b[33m⚡ Missing requires detected:\x1b[0m')
           for (const line of formatSuggestions(suggestions)) {
             console.error(line)
           }
           const { confirm } = await import('@inquirer/prompts')
           const addThem = await confirm({
-            message: 'requires에 추가할까요?',
+            message: 'Add to requires?',
             default: true,
           })
           if (addThem) {
@@ -893,7 +893,7 @@ export function registerPublish(program: Command): void {
             const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
             yamlData.requires = config.requires
             fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-            console.error('  → anpm.yaml에 requires 업데이트됨\n')
+            console.error('  → Updated requires in anpm.yaml\n')
           }
         }
       }
@@ -949,7 +949,7 @@ export function registerPublish(program: Command): void {
       }
 
       if (!json) {
-        console.error(`패키지 생성 중... (${config.name} v${config.version})`)
+        console.error(`Building package... (${config.name} v${config.version})`)
       }
 
       // Generate bin/relay-preamble.sh (self-contained tracking + update check)
@@ -988,7 +988,7 @@ export function registerPublish(program: Command): void {
 
       try {
         if (!json) {
-          console.error(`업로드 중...`)
+          console.error(`Uploading...`)
         }
 
         const result = await publishToApi(token, metadata)
@@ -998,7 +998,7 @@ export function registerPublish(program: Command): void {
         if (gitUrlRaw) {
           const gitUrl = buildGitUrl(gitUrlRaw, { token })
           if (!json) {
-            console.error('git 저장소에 푸시 중...')
+            console.error('Pushing to git repository...')
           }
           try {
             const isFirstPublish = !(result as unknown as Record<string, unknown>).is_update
@@ -1010,10 +1010,10 @@ export function registerPublish(program: Command): void {
           } catch (gitPushErr) {
             const gpMsg = gitPushErr instanceof Error ? gitPushErr.message : String(gitPushErr)
             if (json) {
-              console.log(JSON.stringify({ error: 'GIT_PUSH_FAILED', message: `git push 실패: ${gpMsg}` }))
+              console.log(JSON.stringify({ error: 'GIT_PUSH_FAILED', message: `git push failed: ${gpMsg}` }))
             } else {
-              console.error(`\x1b[31m✖ git push 실패: ${gpMsg}\x1b[0m`)
-              console.error('\x1b[33m  재시도하려면 anpm publish를 다시 실행하세요.\x1b[0m')
+              console.error(`\x1b[31m✖ git push failed: ${gpMsg}\x1b[0m`)
+              console.error('\x1b[33m  To retry, run anpm publish again.\x1b[0m')
             }
             process.exit(1)
           }
@@ -1036,8 +1036,8 @@ export function registerPublish(program: Command): void {
         if (json) {
           console.log(JSON.stringify(result))
         } else {
-          console.log(`\n\x1b[32m✓ ${config.name} 배포 완료\x1b[0m  v${result.version}`)
-          console.log(`  슬러그: \x1b[36m${result.slug}\x1b[0m`)
+          console.log(`\n\x1b[32m✓ ${config.name} published\x1b[0m  v${result.version}`)
+          console.log(`  slug: \x1b[36m${result.slug}\x1b[0m`)
           console.log(`  URL:    \x1b[36m${result.url}\x1b[0m`)
 
           // Build share block
@@ -1054,14 +1054,14 @@ export function registerPublish(program: Command): void {
               npxInstallCmd = `npx anpm-io install ${result.slug}`
             }
 
-            // ── 공유 텍스트 (박스, 그대로 복붙) ──
+            // ── Share text (box, ready to copy-paste) ──
             if (isTTY) {
               const shareBlock = [
-                `[${config.name}] 설치하기`,
+                `[${config.name}] Install`,
                 ``,
                 npxInstallCmd,
                 ``,
-                `소개: https://anpm.io/@${detailSlug}`,
+                `Info: https://anpm.io/@${detailSlug}`,
               ]
 
               const maxLen = Math.max(...shareBlock.map((l) => l.length))
@@ -1072,7 +1072,7 @@ export function registerPublish(program: Command): void {
                 console.log(`  \x1b[90m│\x1b[0m ${line}${pad} \x1b[90m│\x1b[0m`)
               }
               console.log(`  \x1b[90m└${border}┘\x1b[0m`)
-              console.log(`  \x1b[90m↑ 팀에 공유하세요\x1b[0m`)
+              console.log(`  \x1b[90m↑ Share with your team\x1b[0m`)
             }
           }
         }

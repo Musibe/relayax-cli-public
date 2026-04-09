@@ -18,7 +18,7 @@ const SYNC_DIRS = ['skills', 'commands', 'agents', 'rules'] as const
 // ─── Types ───
 
 interface FileEntry {
-  /** .relay/ 기준 상대 경로 (예: skills/my-skill/SKILL.md) */
+  /** Relative path from .relay/ (e.g., skills/my-skill/SKILL.md) */
   relPath: string
   hash: string
 }
@@ -37,15 +37,15 @@ import type { ContentType } from '../lib/ai-tools.js'
 export interface ContentEntry {
   name: string
   type: ContentType
-  from?: string // 상대 경로(.claude/skills/x) 또는 글로벌(~/.claude/skills/x)
-  path?: string // from의 별칭 (relay.yaml에서 path로 작성해도 동작)
+  from?: string // relative path (.claude/skills/x) or global (~/.claude/skills/x)
+  path?: string // alias for from (path also works in relay.yaml)
 }
 
-/** from 또는 path 중 존재하는 값을 반환 */
+/** Return whichever of from or path is set */
 function getFromPath(entry: ContentEntry): string {
   const val = entry.from ?? entry.path
   if (!val) {
-    throw new Error(`contents 항목 "${entry.name}"에 from 또는 path가 필요합니다.`)
+    throw new Error(`Contents entry "${entry.name}" requires a from or path field.`)
   }
   return val
 }
@@ -75,14 +75,14 @@ function fileHash(filePath: string): string {
 }
 
 /**
- * 소스와 .relay/를 비교하여 diff를 생성한다.
+ * Compare source with .relay/ and generate a diff.
  */
 function computeDiff(sourceFiles: FileEntry[], relayFiles: FileEntry[]): DiffEntry[] {
   const relayMap = new Map(relayFiles.map((f) => [f.relPath, f.hash]))
   const sourceMap = new Map(sourceFiles.map((f) => [f.relPath, f.hash]))
   const diff: DiffEntry[] = []
 
-  // 소스에 있는 파일
+  // Files in source
   for (const [relPath, hash] of sourceMap) {
     const relayHash = relayMap.get(relPath)
     if (!relayHash) {
@@ -94,7 +94,7 @@ function computeDiff(sourceFiles: FileEntry[], relayFiles: FileEntry[]): DiffEnt
     }
   }
 
-  // .relay/에만 있는 파일 (소스에서 삭제됨)
+  // Files only in .relay/ (deleted from source)
   for (const [relPath] of relayMap) {
     if (!sourceMap.has(relPath)) {
       diff.push({ relPath, status: 'deleted' })
@@ -105,7 +105,7 @@ function computeDiff(sourceFiles: FileEntry[], relayFiles: FileEntry[]): DiffEnt
 }
 
 /**
- * 소스에서 .relay/로 파일을 동기화한다.
+ * Sync files from source to .relay/.
  */
 function syncToRelay(sourceBase: string, relayDir: string, diff: DiffEntry[]): void {
   for (const entry of diff) {
@@ -118,7 +118,7 @@ function syncToRelay(sourceBase: string, relayDir: string, diff: DiffEntry[]): v
     } else if (entry.status === 'deleted') {
       if (fs.existsSync(relayPath)) {
         fs.unlinkSync(relayPath)
-        // 빈 디렉토리 정리
+        // Clean up empty directories
         const parentDir = path.dirname(relayPath)
         try {
           const remaining = fs.readdirSync(parentDir).filter((f) => !f.startsWith('.'))
@@ -132,8 +132,8 @@ function syncToRelay(sourceBase: string, relayDir: string, diff: DiffEntry[]): v
 // ─── Contents-based Helpers ───
 
 /**
- * from 경로를 절대 경로로 해석한다.
- * ~/로 시작하면 홈 디렉토리, 그 외는 projectPath 기준 상대 경로.
+ * Resolve a from path to an absolute path.
+ * Paths starting with ~/ resolve to home directory, others relative to projectPath.
  */
 function resolveFromPath(fromPath: string, projectPath: string): string {
   if (fromPath.startsWith('~/')) {
@@ -143,8 +143,8 @@ function resolveFromPath(fromPath: string, projectPath: string): string {
 }
 
 /**
- * 파일 또는 디렉토리의 모든 파일을 재귀 스캔하여 FileEntry[]를 반환한다.
- * relPath는 baseDir 기준.
+ * Recursively scan a file or directory and return FileEntry[].
+ * relPath is relative to baseDir.
  */
 function scanPath(absPath: string): FileEntry[] {
   if (!fs.existsSync(absPath)) return []
@@ -154,7 +154,7 @@ function scanPath(absPath: string): FileEntry[] {
     return [{ relPath: path.basename(absPath), hash: fileHash(absPath) }]
   }
 
-  // 디렉토리
+  // Directory
   const entries: FileEntry[] = []
   function walk(dir: string) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -172,7 +172,7 @@ function scanPath(absPath: string): FileEntry[] {
 }
 
 /**
- * contents 매니페스트 기반으로 각 항목의 원본과 .relay/ 복사본을 비교한다.
+ * Compare original and .relay/ copy of each item based on the contents manifest.
  */
 export function computeContentsDiff(
   contents: ContentEntry[],
@@ -189,7 +189,7 @@ export function computeContentsDiff(
       continue
     }
 
-    // from 경로에서 .relay/ 내 대응 위치 결정
+    // Determine corresponding location in .relay/ from the from path
     // from: .claude/skills/code-review → .relay/skills/code-review
     // from: ~/.claude/skills/code-review → .relay/skills/code-review
     const relaySubPath = deriveRelaySubPath(entry)
@@ -209,21 +209,21 @@ export function computeContentsDiff(
     })
   }
 
-  // 소스 디렉토리를 다시 스캔하여 contents에 없는 새 항목 탐지
+  // Re-scan source directories to detect new items not in contents
   const newItems = discoverNewItems(contents, projectPath)
 
   return { diff, newItems }
 }
 
 /**
- * contents 항목의 from 경로에서 .relay/ 내 서브경로를 유도한다.
- * 예: .claude/skills/code-review → skills/code-review
+ * Derive .relay/ sub-path from a contents entry's from path.
+ * e.g., .claude/skills/code-review → skills/code-review
  *     ~/.claude/agents/dev-lead.md → agents/dev-lead.md
  */
 function deriveRelaySubPath(entry: ContentEntry): string {
   const fromPath = getFromPath(entry)
   const from = fromPath.startsWith('~/') ? fromPath.slice(2) : fromPath
-  // skills/xxx, agents/xxx 등의 패턴을 추출
+  // Extract skills/xxx, agents/xxx etc. patterns
   for (const dir of SYNC_DIRS) {
     const idx = from.indexOf(`/${dir}/`)
     if (idx !== -1) {
@@ -235,13 +235,13 @@ function deriveRelaySubPath(entry: ContentEntry): string {
 }
 
 /**
- * contents에 등록되지 않은 새 항목을 소스 디렉토리에서 찾는다.
+ * Find new items in source directories that are not registered in contents.
  */
 function discoverNewItems(contents: ContentEntry[], projectPath: string): NewItemEntry[] {
   const existingNames = new Set(contents.map((c) => `${c.type}:${c.name}`))
   const newItems: NewItemEntry[] = []
 
-  // 로컬 소스 스캔
+  // Scan local sources
   const localTools = detectAgentCLIs(projectPath)
   for (const tool of localTools) {
     const items = scanLocalItems(projectPath, tool)
@@ -257,7 +257,7 @@ function discoverNewItems(contents: ContentEntry[], projectPath: string): NewIte
     }
   }
 
-  // 글로벌 소스 스캔
+  // Scan global sources
   const globalTools = detectGlobalCLIs()
   for (const tool of globalTools) {
     const items = scanGlobalItems(tool)
@@ -277,7 +277,7 @@ function discoverNewItems(contents: ContentEntry[], projectPath: string): NewIte
 }
 
 /**
- * contents 항목 단위로 from → .relay/ 동기화한다.
+ * Sync from → .relay/ per contents entry.
  */
 export function syncContentsToRelay(
   contents: ContentEntry[],
@@ -290,7 +290,7 @@ export function syncContentsToRelay(
   for (const diffEntry of contentsDiff) {
     const content = contents.find((c) => c.name === diffEntry.name && c.type === diffEntry.type)
 
-    // source_missing: 소스에서 삭제됨 → .relay/에서도 제거
+    // source_missing: deleted from source → remove from .relay/ too
     if (diffEntry.status === 'source_missing') {
       const relaySubPath = content ? deriveRelaySubPath(content) : `${diffEntry.type}s/${diffEntry.name}`
       const relayTarget = path.join(relayDir, relaySubPath)
@@ -308,14 +308,14 @@ export function syncContentsToRelay(
     const relaySubPath = deriveRelaySubPath(content)
     const relayTarget = path.join(relayDir, relaySubPath)
 
-    // 단일 파일인 경우 직접 복사
+    // Single file — copy directly
     if (fs.existsSync(absFrom) && fs.statSync(absFrom).isFile()) {
       fs.mkdirSync(path.dirname(relayTarget), { recursive: true })
       fs.copyFileSync(absFrom, relayTarget)
       continue
     }
 
-    // 디렉토리인 경우 diff 기반 동기화 (deleted 포함)
+    // Directory — diff-based sync (including deleted)
     const sourceFiles = scanPath(absFrom)
     const relayFiles = scanPath(relayTarget)
     const fileDiff = computeDiff(sourceFiles, relayFiles)
@@ -326,7 +326,7 @@ export function syncContentsToRelay(
 }
 
 /**
- * .relay/ 내에 있지만 contents 매니페스트에 없는 orphan 항목을 찾는다.
+ * Find orphan items in .relay/ that are not in the contents manifest.
  */
 export function findOrphanItems(contents: ContentEntry[], relayDir: string): string[] {
   const contentPaths = new Set(contents.map((c) => deriveRelaySubPath(c)))
@@ -351,22 +351,22 @@ export function findOrphanItems(contents: ContentEntry[], relayDir: string): str
 // ─── Global Agent Home ───
 
 /**
- * 패키지 홈 디렉토리를 결정한다.
- * 1. 프로젝트에 .relay/가 있으면 → projectPath/.relay/
- * 2. 없으면 → ~/.relay/agents/<slug>/ (slug 필요)
+ * Determine the package home directory.
+ * 1. If project has .relay/ → projectPath/.relay/
+ * 2. Otherwise → ~/.relay/agents/<slug>/ (slug required)
  *
- * slug가 없고 프로젝트에도 .relay/가 없으면 null 반환.
+ * Returns null if no slug and no project .relay/.
  */
 export function resolveRelayDir(projectPath: string, slug?: string): string | null {
   const projectRelay = path.join(projectPath, '.relay')
   if (fs.existsSync(path.join(projectRelay, 'relay.yaml'))) {
     return projectRelay
   }
-  // .relay/ 디렉토리는 있지만 relay.yaml이 없는 경우도 프로젝트 모드
+  // .relay/ exists without relay.yaml — still project mode
   if (fs.existsSync(projectRelay)) {
     return projectRelay
   }
-  // 글로벌 에이전트 홈
+  // Global agent home
   if (slug) {
     return path.join(os.homedir(), '.relay', 'agents', slug)
   }
@@ -374,7 +374,7 @@ export function resolveRelayDir(projectPath: string, slug?: string): string | nu
 }
 
 /**
- * 글로벌 에이전트 홈에 패키지 구조를 초기화한다.
+ * Initialize package structure in the global agent home.
  */
 export function initGlobalAgentHome(slug: string, yamlData: Record<string, unknown>): string {
   const agentDir = path.join(os.homedir(), '.relay', 'agents', slug)
@@ -394,13 +394,13 @@ export function initGlobalAgentHome(slug: string, yamlData: Record<string, unkno
 export function registerPackage(program: Command): void {
   program
     .command('package', { hidden: true })
-    .description('소스 디렉토리에서 .relay/로 콘텐츠를 동기화합니다')
-    .option('--source <dir>', '소스 디렉토리 지정 (예: .claude)')
-    .option('--sync', '변경사항을 .relay/에 즉시 반영', false)
-    .option('--init', '최초 패키징: 소스 감지 → .relay/ 초기화', false)
-    .option('--migrate', '기존 source 필드를 contents로 마이그레이션', false)
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
-    .option('--home <dir>', '홈 디렉토리 경로 (기본: os.homedir(), 환경변수: RELAY_HOME)')
+    .description('Sync content from source directories to .relay/')
+    .option('--source <dir>', 'Source directory (e.g., .claude)')
+    .option('--sync', 'Apply changes to .relay/ immediately', false)
+    .option('--init', 'Initial packaging: detect sources → initialize .relay/', false)
+    .option('--migrate', 'Migrate legacy source field to contents', false)
+    .option('--project <dir>', 'Project root path (default: cwd, env: RELAY_PROJECT_PATH)')
+    .option('--home <dir>', 'Home directory path (default: os.homedir(), env: RELAY_HOME)')
     .action(async (opts: { source?: string; sync?: boolean; init?: boolean; migrate?: boolean; project?: string; home?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = resolveProjectPath(opts.project)
@@ -408,9 +408,9 @@ export function registerPackage(program: Command): void {
       const relayDir = path.join(projectPath, '.relay')
       const relayYamlPath = path.join(relayDir, 'relay.yaml')
 
-      // ─── 최초 패키징 (--init) ───
+      // ─── Initial packaging (--init) ───
       if (opts.init || !fs.existsSync(relayYamlPath)) {
-        // 로컬 + 글로벌 소스를 모두 스캔하여 개별 항목 목록 생성
+        // Scan both local + global sources to generate item lists
         const localTools = detectAgentCLIs(projectPath)
         const globalTools = detectGlobalCLIs(homeDir)
 
@@ -447,7 +447,7 @@ export function registerPackage(program: Command): void {
           }
         }
 
-        // ~/.relay/agents/ 에 기존 에이전트 패키지가 있는지 스캔
+        // Scan ~/.relay/agents/ for existing agent packages
         const globalAgentsDir = path.join(homeDir ?? os.homedir(), '.relay', 'agents')
         const existingAgents: { slug: string; name: string; version: string; path: string }[] = []
         if (fs.existsSync(globalAgentsDir)) {
@@ -476,20 +476,20 @@ export function registerPackage(program: Command): void {
           }))
         } else {
           if (sources.length === 0 && existingAgents.length === 0) {
-            console.error('배포 가능한 에이전트 콘텐츠를 찾지 못했습니다.')
-            console.error('skills/, commands/, agents/, rules/ 중 하나를 만들어주세요.')
+            console.error('No publishable agent content found.')
+            console.error('Create at least one of: skills/, commands/, agents/, rules/')
             process.exit(1)
           }
 
           if (sources.length > 0) {
-            console.error('\n발견된 에이전트 콘텐츠:\n')
+            console.error('\nDiscovered agent content:\n')
             for (const src of sources) {
               const typeCounts = new Map<string, number>()
               for (const item of src.items) {
                 typeCounts.set(item.type, (typeCounts.get(item.type) ?? 0) + 1)
               }
               const parts = Array.from(typeCounts.entries())
-                .map(([t, c]) => `${t} ${c}개`)
+                .map(([t, c]) => `${t} ${c}`)
                 .join(', ')
               const label = src.location === 'global' ? '🌐' : '📁'
               console.error(`  ${label} ${src.path}/ — ${parts}`)
@@ -497,7 +497,7 @@ export function registerPackage(program: Command): void {
           }
 
           if (existingAgents.length > 0) {
-            console.error('\n기존 글로벌 에이전트:\n')
+            console.error('\nExisting global agents:\n')
             for (const agent of existingAgents) {
               console.error(`  📦 ${agent.name} (v${agent.version}) — ${agent.path}`)
             }
@@ -508,16 +508,16 @@ export function registerPackage(program: Command): void {
         return
       }
 
-      // ─── 마이그레이션 (--migrate) ───
+      // ─── Migration (--migrate) ───
       if (opts.migrate) {
         const yamlMigrate = fs.readFileSync(relayYamlPath, 'utf-8')
         const cfgMigrate = yaml.load(yamlMigrate) as Record<string, unknown>
 
         if (cfgMigrate.contents) {
           if (json) {
-            console.log(JSON.stringify({ status: 'already_migrated', message: '이미 contents 형식입니다.' }))
+            console.log(JSON.stringify({ status: 'already_migrated', message: 'Already using contents format.' }))
           } else {
-            console.error('✓ 이미 contents 형식입니다.')
+            console.error('✓ Already using contents format.')
           }
           return
         }
@@ -525,14 +525,14 @@ export function registerPackage(program: Command): void {
         const legacySource = cfgMigrate.source as string | undefined
         if (!legacySource) {
           if (json) {
-            console.log(JSON.stringify({ status: 'no_source', message: 'source 필드가 없습니다.' }))
+            console.log(JSON.stringify({ status: 'no_source', message: 'No source field found.' }))
           } else {
-            console.error('source 필드가 없습니다. anpm package --init으로 초기화하세요.')
+            console.error('No source field found. Initialize with anpm package --init.')
           }
           process.exit(1)
         }
 
-        // source 디렉토리를 스캔하여 모든 항목을 contents[]로 변환
+        // Scan source directory and convert all items to contents[]
         const sourceBase = path.join(projectPath, legacySource)
         const migratedContents: ContentEntry[] = []
 
@@ -551,7 +551,7 @@ export function registerPackage(program: Command): void {
           }
         }
 
-        // relay.yaml에서 source 제거, contents 저장
+        // Remove source from relay.yaml, save contents
         delete cfgMigrate.source
         cfgMigrate.contents = migratedContents
         fs.writeFileSync(relayYamlPath, yaml.dump(cfgMigrate, { lineWidth: 120 }), 'utf-8')
@@ -559,29 +559,29 @@ export function registerPackage(program: Command): void {
         if (json) {
           console.log(JSON.stringify({ status: 'migrated', contents: migratedContents }))
         } else {
-          console.error(`✓ source(${legacySource}) → contents(${migratedContents.length}개 항목)로 마이그레이션 완료`)
+          console.error(`✓ Migrated source(${legacySource}) → contents(${migratedContents.length} entries)`)
         }
         return
       }
 
-      // ─── 재패키징 (contents 매니페스트 기반 동기화) ───
+      // ─── Re-packaging (contents manifest-based sync) ───
       const yamlContent = fs.readFileSync(relayYamlPath, 'utf-8')
       const config = yaml.load(yamlContent) as Record<string, unknown>
       const rawContents = config.contents
       const contents: ContentEntry[] = Array.isArray(rawContents) ? rawContents : []
 
-      // 기존 source 필드 → contents 마이그레이션 안내
+      // Legacy source field → contents migration notice
       if (!config.contents && config.source) {
         const legacySource = config.source as string
         if (json) {
           console.log(JSON.stringify({
             status: 'migration_required',
-            message: `relay.yaml의 source 필드를 contents로 마이그레이션해야 합니다.`,
+            message: `The source field in relay.yaml needs to be migrated to contents.`,
             legacy_source: legacySource,
           }))
         } else {
-          console.error(`relay.yaml에 기존 source 필드(${legacySource})가 있습니다.`)
-          console.error(`contents 형식으로 마이그레이션하려면: anpm package --migrate`)
+          console.error(`relay.yaml has a legacy source field (${legacySource}).`)
+          console.error(`To migrate to contents format: anpm package --migrate`)
         }
         process.exit(1)
       }
@@ -590,16 +590,16 @@ export function registerPackage(program: Command): void {
         if (json) {
           console.log(JSON.stringify({
             status: 'no_contents',
-            message: 'relay.yaml에 contents가 없습니다. anpm package --init으로 패키지를 초기화하세요.',
+            message: 'No contents in relay.yaml. Initialize with anpm package --init.',
           }))
         } else {
-          console.error('relay.yaml에 contents가 없습니다.')
-          console.error('anpm package --init으로 패키지를 초기화하세요.')
+          console.error('No contents in relay.yaml.')
+          console.error('Initialize with anpm package --init.')
         }
         process.exit(1)
       }
 
-      // contents 기반 diff 계산
+      // Compute diff based on contents
       const { diff: contentsDiff, newItems } = computeContentsDiff(contents, relayDir, projectPath)
       const orphans = findOrphanItems(contents, relayDir)
 
@@ -613,10 +613,10 @@ export function registerPackage(program: Command): void {
 
       const hasChanges = summary.modified > 0 || summary.source_missing > 0 || summary.orphaned > 0
 
-      // --sync: contents 단위 동기화 + orphan 정리
+      // --sync: per-contents sync + orphan cleanup
       if (opts.sync && hasChanges) {
         const { removed } = syncContentsToRelay(contents, contentsDiff, relayDir, projectPath)
-        // orphan 항목 삭제
+        // Delete orphan items
         for (const orphan of orphans) {
           const orphanPath = path.join(relayDir, orphan)
           if (fs.existsSync(orphanPath)) {
@@ -638,14 +638,14 @@ export function registerPackage(program: Command): void {
         console.log(JSON.stringify(result))
       } else {
         if (!hasChanges && newItems.length === 0 && summary.source_missing === 0) {
-          console.error('✓ 모든 콘텐츠가 동기화 상태입니다.')
+          console.error('✓ All content is in sync.')
           return
         }
 
-        console.error('\n📦 콘텐츠 동기화 상태\n')
+        console.error('\n📦 Content sync status\n')
         for (const entry of contentsDiff) {
           if (entry.status === 'unchanged') continue
-          const icon = entry.status === 'modified' ? '  변경' : '  ⚠ 원본 없음'
+          const icon = entry.status === 'modified' ? '  modified' : '  ⚠ source missing'
           console.error(`${icon}: ${entry.name} (${entry.type})`)
           if (entry.files) {
             for (const f of entry.files) {
@@ -655,26 +655,26 @@ export function registerPackage(program: Command): void {
         }
 
         if (orphans.length > 0) {
-          console.error('\n  \x1b[33m.relay/에만 존재 (소스에서 삭제됨):\x1b[0m')
+          console.error('\n  \x1b[33mOnly in .relay/ (deleted from source):\x1b[0m')
           for (const orphan of orphans) {
             console.error(`    \x1b[31m✗ ${orphan}\x1b[0m`)
           }
         }
 
         if (newItems.length > 0) {
-          console.error('\n  새로 발견된 콘텐츠:')
+          console.error('\n  Newly discovered content:')
           for (const item of newItems) {
             console.error(`    + ${item.name} (${item.type}) — ${item.source}`)
           }
         }
 
         console.error('')
-        console.error(`  합계: 변경 ${summary.modified}, 유지 ${summary.unchanged}, 원본 없음 ${summary.source_missing}, 신규 ${summary.new_available}, 고아 ${summary.orphaned}`)
+        console.error(`  Total: modified ${summary.modified}, unchanged ${summary.unchanged}, source missing ${summary.source_missing}, new ${summary.new_available}, orphaned ${summary.orphaned}`)
 
         if (opts.sync) {
-          console.error('\n✓ .relay/에 반영 완료')
+          console.error('\n✓ Applied to .relay/')
         } else if (hasChanges) {
-          console.error('\n반영하려면: anpm package --sync')
+          console.error('\nTo apply: anpm package --sync')
         }
       }
     })

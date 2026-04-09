@@ -250,7 +250,7 @@ export function registerInstall(program: Command): void {
           if (!token) {
             const isTTY = Boolean(process.stdin.isTTY)
             if (isTTY && !json) {
-              console.error('\x1b[33m⚙ 이 에이전트는 로그인이 필요합니다. 로그인을 시작합니다...\x1b[0m')
+              console.error('\x1b[33m⚙ This agent requires login. Starting login...\x1b[0m')
               const { runLogin } = await import('./login.js')
               await runLogin()
               token = await getValidToken()
@@ -267,11 +267,11 @@ export function registerInstall(program: Command): void {
               console.error(JSON.stringify({
                 error: 'LOGIN_REQUIRED',
                 slug,
-                message: '이 에이전트는 로그인이 필요합니다. anpm login을 먼저 실행하세요.',
-                fix: 'anpm login 실행 후 재시도하세요.',
+                message: 'This agent requires authentication. Run anpm login first.',
+                fix: 'Run anpm login and try again.',
               }))
             } else {
-              console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. anpm login 을 먼저 실행하세요.\x1b[0m')
+              console.error('\x1b[31mThis agent requires authentication. Run anpm login first.\x1b[0m')
             }
             process.exit(1)
           }
@@ -298,7 +298,7 @@ export function registerInstall(program: Command): void {
             // --code provided → use unified access-codes API (handles both org join and agent grant)
             if (_opts.code) {
               if (!json) {
-                console.error('\x1b[33m⚙ 접근 코드로 권한을 요청합니다...\x1b[0m')
+                console.error('\x1b[33m⚙ Requesting access with code...\x1b[0m')
               }
               const token = await getValidToken()
               if (!token) {
@@ -306,11 +306,11 @@ export function registerInstall(program: Command): void {
                   console.error(JSON.stringify({
                     error: 'LOGIN_REQUIRED',
                     slug,
-                    message: '이 에이전트는 로그인이 필요합니다. anpm login을 먼저 실행하세요.',
-                    fix: 'anpm login 실행 후 재시도하세요.',
+                    message: 'This agent requires authentication. Run anpm login first.',
+                    fix: 'Run anpm login and try again.',
                   }))
                 } else {
-                  console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. anpm login 을 먼저 실행하세요.\x1b[0m')
+                  console.error('\x1b[31mThis agent requires authentication. Run anpm login first.\x1b[0m')
                 }
                 process.exit(1)
               }
@@ -325,8 +325,8 @@ export function registerInstall(program: Command): void {
               if (!codeRes.ok) {
                 const codeBody = (await codeRes.json().catch(() => ({}))) as { error?: string; message?: string }
                 const codeErrCode = codeBody.error ?? String(codeRes.status)
-                if (codeErrCode === 'INVALID_LINK') throw new Error('접근 코드가 유효하지 않거나 만료되었습니다.')
-                throw new Error(codeBody.message ?? `접근 권한 요청 실패 (${codeRes.status})`)
+                if (codeErrCode === 'INVALID_LINK') throw new Error('Access code is invalid or expired.')
+                throw new Error(codeBody.message ?? `Access request failed (${codeRes.status})`)
               }
               agent = await fetchAgentInfo(slug)
             }
@@ -336,20 +336,20 @@ export function registerInstall(program: Command): void {
               if (json) {
                 console.error(JSON.stringify({
                   error: 'ACCESS_REQUIRED',
-                  message: '이 에이전트는 접근 권한이 필요합니다.',
+                  message: 'This agent requires access.',
                   slug,
                   purchase_info: purchaseInfo ?? null,
-                  fix: '접근 링크 코드가 있으면: anpm install ' + slugInput + ' --code <코드>',
+                  fix: 'If you have an access code: anpm install ' + slugInput + ' --code <code>',
                 }))
               } else {
-                console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
+                console.error('\x1b[31mThis agent requires access.\x1b[0m')
                 if (purchaseInfo?.message) {
                   console.error(`\n  \x1b[36m${purchaseInfo.message}\x1b[0m`)
                 }
                 if (purchaseInfo?.url) {
                   console.error(`  \x1b[36m${purchaseInfo.url}\x1b[0m`)
                 }
-                console.error(`\n\x1b[33m접근 링크 코드가 있으면: anpm install ${slugInput} --code <코드>\x1b[0m`)
+                console.error(`\n\x1b[33mIf you have an access code: anpm install ${slugInput} --code <code>\x1b[0m`)
               }
               process.exit(1)
             } else if (membershipStatus === 'member') {
@@ -357,25 +357,25 @@ export function registerInstall(program: Command): void {
               if (json) {
                 console.error(JSON.stringify({
                   error: 'NO_ACCESS',
-                  message: '이 에이전트에 대한 접근 권한이 없습니다.',
+                  message: 'You do not have access to this agent.',
                   slug,
-                  fix: '이 에이전트의 접근 링크 코드가 있으면 `anpm install ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 에이전트 제작자에게 문의하세요.',
+                  fix: 'If you have an access code, run `anpm install ' + slugInput + ' --code <code>`. Otherwise, contact the agent author.',
                 }))
               } else {
-                console.error('\x1b[31m이 에이전트에 대한 접근 권한이 없습니다.\x1b[0m')
+                console.error('\x1b[31mYou do not have access to this agent.\x1b[0m')
               }
               process.exit(1)
             } else {
               if (json) {
                 console.error(JSON.stringify({
                   error: 'ACCESS_REQUIRED',
-                  message: '이 에이전트는 접근 권한이 필요합니다.',
+                  message: 'This agent requires access.',
                   slug,
-                  fix: '접근 코드가 있으면 `anpm install ' + slugInput + ' --code <코드>`로 설치하세요.',
+                  fix: 'If you have an access code: `anpm install ' + slugInput + ' --code <code>`',
                 }))
               } else {
-                console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
-                console.error('\x1b[33m접근 코드가 있으면 `anpm install ' + slugInput + ' --code <코드>`로 설치하세요.\x1b[0m')
+                console.error('\x1b[31mThis agent requires access.\x1b[0m')
+                console.error('\x1b[33mIf you have an access code: `anpm install ' + slugInput + ' --code <code>`\x1b[0m')
               }
               process.exit(1)
             }
@@ -384,7 +384,7 @@ export function registerInstall(program: Command): void {
           }
         }
 
-        if (!agent) throw new Error('에이전트 정보를 가져오지 못했습니다.')
+        if (!agent) throw new Error('Failed to fetch agent info.')
 
         // Re-bind as non-optional so TypeScript tracks the narrowing through nested scopes
         let resolvedAgent: AgentRegistryInfo = agent
@@ -393,7 +393,7 @@ export function registerInstall(program: Command): void {
         const interactive = isTTY && !json
         const defaultScope = resolvedAgent.recommended_scope ?? (resolvedAgent.type === 'passive' ? 'local' : 'global')
 
-        // ── 1. AI tools 선택 (scope 무관, 항상 홈 디렉토리에서 감지) ──
+        // ── 1. AI tools selection (scope-independent, always detected from home dir) ──
         let selectedTools: AITool[] | undefined
         if (interactive) {
           const detected = detectGlobalCLIs()
@@ -404,7 +404,7 @@ export function registerInstall(program: Command): void {
           const detectedValues = new Set(detected.map((t) => t.value))
           const { checkbox } = await import('@inquirer/prompts')
           selectedTools = await checkbox<AITool>({
-            message: '설치할 AI 도구를 선택하세요 (감지된 도구는 자동 선택됨)',
+            message: 'Select AI tools to install (detected tools are pre-selected)',
             choices: AI_TOOLS.map((t) => ({
               name: t.name,
               value: t,
@@ -413,17 +413,17 @@ export function registerInstall(program: Command): void {
           })
         }
 
-        // ── 2. 글로벌 slash commands 설치/업데이트 ──
+        // ── 2. Install/update global slash commands ──
         if (selectedTools) {
           installGlobalUserCommands(selectedTools)
         } else if (!hasGlobalUserCommands()) {
           if (!json) {
-            console.error('\x1b[33m⚙ 글로벌 커맨드를 자동 설치합니다...\x1b[0m')
+            console.error('\x1b[33m⚙ Auto-installing global commands...\x1b[0m')
           }
           installGlobalUserCommands()
         }
 
-        // ── 3. Scope 결정: 플래그 > TTY prompt > 자동결정 ──
+        // ── 3. Scope resolution: flag > TTY prompt > auto ──
         let scope: 'global' | 'local'
         if (_opts.global) {
           scope = 'global'
@@ -431,12 +431,12 @@ export function registerInstall(program: Command): void {
           scope = 'local'
         } else if (interactive) {
           const { select } = await import('@inquirer/prompts')
-          const recommendLabel = defaultScope === 'global' ? '글로벌' : '로컬'
+          const recommendLabel = defaultScope === 'global' ? 'global' : 'local'
           scope = await select<'global' | 'local'>({
-            message: `설치 범위를 선택하세요 (제작자 권장: ${recommendLabel})`,
+            message: `Select install scope (author recommends: ${recommendLabel})`,
             choices: [
-              { name: '글로벌 (~/.anpm/agents/) — 모든 프로젝트에서 사용', value: 'global' },
-              { name: '로컬 (./.anpm/agents/) — 이 프로젝트에서만 사용', value: 'local' },
+              { name: 'Global (~/.anpm/agents/) — available in all projects', value: 'global' },
+              { name: 'Local (./.anpm/agents/) — this project only', value: 'local' },
             ],
             default: defaultScope,
           })
@@ -448,7 +448,7 @@ export function registerInstall(program: Command): void {
           ? path.join(os.homedir(), '.anpm', 'agents', parsed.owner, parsed.name)
           : path.join(projectPath, '.anpm', 'agents', parsed.owner, parsed.name)
 
-        // 2. 인증: public이면 token 불필요, private/internal이면 로그인 필수
+        // 2. Auth: public needs no token, private/internal requires login
         const isPublic = resolvedAgent.visibility === 'public' || !resolvedAgent.visibility
         let token: string | null = null
         if (!isPublic) {
@@ -458,11 +458,11 @@ export function registerInstall(program: Command): void {
               console.error(JSON.stringify({
                 error: 'LOGIN_REQUIRED',
                 slug,
-                message: '로그인이 필요합니다. anpm login을 먼저 실행하세요.',
-                fix: 'anpm login 실행 후 재시도하세요.',
+                message: 'Authentication required. Run anpm login first.',
+                fix: 'Run anpm login and try again.',
               }))
             } else {
-              console.error('\x1b[31m로그인이 필요합니다. anpm login 을 먼저 실행하세요.\x1b[0m')
+              console.error('\x1b[31mAuthentication required. Run anpm login first.\x1b[0m')
             }
             process.exit(1)
           }
@@ -471,7 +471,7 @@ export function registerInstall(program: Command): void {
         // 3. Download package via git clone
         const requestedVersion = versionMatch ? versionMatch[2] : undefined
         if (!resolvedAgent.git_url) {
-          const errMsg = '이 에이전트는 재publish가 필요합니다. 빌더에게 문의하세요.'
+          const errMsg = 'This agent needs to be re-published. Contact the builder.'
           if (json) {
             console.log(JSON.stringify({ error: 'NO_GIT_URL', message: errMsg }))
           } else {
@@ -488,7 +488,7 @@ export function registerInstall(program: Command): void {
         const clonedEntries = fs.readdirSync(agentDir).filter((f) => f !== '.git')
         if (clonedEntries.length === 0) {
           fs.rmSync(agentDir, { recursive: true, force: true })
-          const errMsg = '에이전트 패키지가 비어있습니다. 빌더에게 재publish를 요청하세요.'
+          const errMsg = 'Agent package is empty. Ask the builder to re-publish.'
           if (json) {
             console.log(JSON.stringify({ error: 'EMPTY_PACKAGE', message: errMsg }))
           } else {
@@ -540,7 +540,7 @@ export function registerInstall(program: Command): void {
           saveInstalled(installed)
         }
 
-        // 8. Report install + usage ping (non-blocking, agent_id 기반)
+        // 8. Report install + usage ping (non-blocking, agent_id based)
         await reportInstall(resolvedAgent.id, slug, resolvedAgent.version)
         sendUsagePing(resolvedAgent.id, slug, resolvedAgent.version)
 
@@ -567,31 +567,31 @@ export function registerInstall(program: Command): void {
         } else {
           const authorUsername = resolvedAgent.author?.username
           const authorSuffix = authorUsername ? `  \x1b[90mby @${authorUsername}\x1b[0m` : ''
-          const scopeLabel = scope === 'global' ? '글로벌' : '로컬'
+          const scopeLabel = scope === 'global' ? 'global' : 'local'
 
-          console.log(`\n\x1b[32m✓ ${resolvedAgent.name} 설치 완료\x1b[0m  v${resolvedAgent.version}${authorSuffix}`)
-          console.log(`  위치: \x1b[36m${agentDir}\x1b[0m`)
-          console.log(`  범위: ${scopeLabel}`)
-          console.log(`  파일: ${fileCount}개, symlink: ${deploy.symlinks.length}개`)
+          console.log(`\n\x1b[32m✓ ${resolvedAgent.name} installed\x1b[0m  v${resolvedAgent.version}${authorSuffix}`)
+          console.log(`  path: \x1b[36m${agentDir}\x1b[0m`)
+          console.log(`  scope: ${scopeLabel}`)
+          console.log(`  files: ${fileCount}, symlinks: ${deploy.symlinks.length}`)
           const userCommands = resolvedAgent.commands.filter((c) => !c.name.startsWith('setup-'))
           if (userCommands.length > 0) {
-            console.log('\n  포함된 커맨드:')
+            console.log('\n  Included commands:')
             for (const cmd of userCommands) {
               console.log(`    \x1b[33m/${cmd.name}\x1b[0m - ${cmd.description}`)
             }
           }
 
-          // Usage hint (type-aware, setup command 제외)
+          // Usage hint (type-aware, excluding setup commands)
           const agentType = resolvedAgent.type
           const mainCommand = userCommands[0]
           if (agentType === 'passive') {
-            console.log(`\n\x1b[33m💡 자동 적용됩니다. 별도 실행 없이 동작합니다.\x1b[0m`)
+            console.log(`\n\x1b[33m💡 Applied automatically. No additional commands needed.\x1b[0m`)
           } else if (agentType === 'hybrid' && mainCommand) {
-            console.log(`\n\x1b[33m💡 자동 적용 + \x1b[1m/${mainCommand.name}\x1b[0m\x1b[33m 으로 추가 기능을 사용할 수 있습니다.\x1b[0m`)
+            console.log(`\n\x1b[33m💡 Applied automatically + use \x1b[1m/${mainCommand.name}\x1b[0m\x1b[33m for additional features.\x1b[0m`)
           } else if (mainCommand) {
-            console.log(`\n\x1b[33m💡 사용법: \x1b[1m/${mainCommand.name}\x1b[0m`)
+            console.log(`\n\x1b[33m💡 Usage: \x1b[1m/${mainCommand.name}\x1b[0m`)
           } else {
-            console.log(`\n\x1b[33m💡 설치 완료! AI 에이전트에서 사용할 수 있습니다.\x1b[0m`)
+            console.log(`\n\x1b[33m💡 Installed! Ready to use with your AI agent.\x1b[0m`)
           }
 
           // Requires check + setup CTA
@@ -601,10 +601,10 @@ export function registerInstall(program: Command): void {
           const setupCmd = resolvedAgent.commands.find((c) => c.name.startsWith('setup-'))
           if (setupCmd && requiresResults.some((r) => r.status === 'missing' || r.status === 'warn')) {
             const toolNames = selectedTools
-              ? selectedTools.map((t) => t.name).slice(0, 2).join(' 또는 ')
+              ? selectedTools.map((t) => t.name).slice(0, 2).join(' or ')
               : 'Claude Code'
-            console.log(`\n  \x1b[36m👉 설정이 필요합니다.\x1b[0m`)
-            console.log(`  \x1b[36m   ${toolNames}를 열고 \x1b[1m/${setupCmd.name}\x1b[0m\x1b[36m 을 입력하세요\x1b[0m`)
+            console.log(`\n  \x1b[36m👉 Setup required.\x1b[0m`)
+            console.log(`  \x1b[36m   Open ${toolNames} and run \x1b[1m/${setupCmd.name}\x1b[0m`)
           }
 
           // Cloud deploy hint

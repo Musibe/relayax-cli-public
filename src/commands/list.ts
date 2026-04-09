@@ -18,7 +18,7 @@ async function fetchOrgAgentList(orgSlug: string, token: string): Promise<OrgAge
   })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`Org 에이전트 목록 조회 실패 (${res.status}): ${body}`)
+    throw new Error(`Failed to fetch org agents (${res.status}): ${body}`)
   }
   return (await res.json()) as OrgAgentEntry[]
 }
@@ -32,17 +32,17 @@ export function registerList(program: Command): void {
     .action(async (opts: { org?: string; detail?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
-      // --org 옵션: Org 에이전트 목록
+      // --org option: Org agent list
       if (opts.org) {
         const orgSlug = opts.org
 
         const token = await getValidToken()
         if (!token) {
           if (json) {
-            console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다. anpm login을 먼저 실행하세요.', fix: 'anpm login 실행 후 재시도하세요.' }))
+            console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: 'Authentication required. Run anpm login first.', fix: 'Run anpm login and try again.' }))
           } else {
-            console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
-            console.error('  anpm login을 먼저 실행하세요.')
+            console.error('\x1b[31mError: Authentication required.\x1b[0m')
+            console.error('  Run anpm login first.')
           }
           process.exit(1)
         }
@@ -56,31 +56,31 @@ export function registerList(program: Command): void {
           }
 
           if (agents.length === 0) {
-            console.log(`\n@${orgSlug} Organization에 에이전트가 없습니다.`)
+            console.log(`\nNo agents found in @${orgSlug} organization.`)
             return
           }
 
-          console.log(`\n\x1b[1m@${orgSlug} 에이전트 목록\x1b[0m (${agents.length}개):\n`)
+          console.log(`\n\x1b[1m@${orgSlug} agents\x1b[0m (${agents.length}):\n`)
           for (const t of agents) {
             const desc = t.description
               ? `  \x1b[90m${t.description.length > 50 ? t.description.slice(0, 50) + '...' : t.description}\x1b[0m`
               : ''
             console.log(`  \x1b[36m@${t.owner}/${t.slug}\x1b[0m  \x1b[1m${t.name}\x1b[0m${desc}`)
           }
-          console.log(`\n\x1b[33m  설치: anpm install @${orgSlug}/<에이전트슬러그>\x1b[0m`)
+          console.log(`\n\x1b[33m  Install: anpm install @${orgSlug}/<agent-slug>\x1b[0m`)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           if (json) {
-            console.error(JSON.stringify({ error: 'FETCH_FAILED', message, fix: '네트워크 연결을 확인하거나 잠시 후 재시도하세요.' }))
+            console.error(JSON.stringify({ error: 'FETCH_FAILED', message, fix: 'Check your network connection or try again later.' }))
           } else {
-            console.error(`\x1b[31m오류: ${message}\x1b[0m`)
+            console.error(`\x1b[31mError: ${message}\x1b[0m`)
           }
           process.exit(1)
         }
         return
       }
 
-      // 기본 동작: 글로벌 + 로컬 통합 목록
+      // Default: merged global + local list
       const { global: globalInstalled, local: localInstalled } = loadMergedInstalled()
 
       interface ListEntry {
@@ -97,7 +97,7 @@ export function registerList(program: Command): void {
       const allEntries: ListEntry[] = []
       const seen = new Set<string>()
 
-      // 글로벌 먼저
+      // Global first
       for (const [slug, info] of Object.entries(globalInstalled) as [string, InstalledAgent][]) {
         allEntries.push({
           slug,

@@ -11,19 +11,19 @@ import { isScopedSlug, parseSlug } from '../lib/slug.js'
 export function registerDeployRecord(program: Command): void {
   program
     .command('deploy-record <slug>', { hidden: true })
-    .description('에이전트가 배치한 파일 정보를 installed.json에 기록합니다')
-    .requiredOption('--scope <scope>', '배치 범위 (global 또는 local)')
-    .option('--files <paths...>', '배치된 파일 경로 목록')
+    .description('Record deployed file info in installed.json')
+    .requiredOption('--scope <scope>', 'Deploy scope (global or local)')
+    .option('--files <paths...>', 'List of deployed file paths')
     .action((slugInput: string, opts: { scope: string; files?: string[] }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const scope = opts.scope
 
       if (scope !== 'global' && scope !== 'local') {
-        const msg = { error: 'INVALID_SCOPE', message: '--scope는 global 또는 local이어야 합니다.' }
+        const msg = { error: 'INVALID_SCOPE', message: '--scope must be global or local.' }
         if (json) {
           console.error(JSON.stringify(msg))
         } else {
-          console.error(`\x1b[31m오류:\x1b[0m ${msg.message}`)
+          console.error(`\x1b[31mError:\x1b[0m ${msg.message}`)
         }
         process.exit(1)
       }
@@ -57,11 +57,11 @@ export function registerDeployRecord(program: Command): void {
       // Check if agent exists in either registry
       const entry = localRegistry[slug] ?? globalRegistry[slug]
       if (!entry) {
-        const msg = { error: 'NOT_INSTALLED', message: `'${slugInput}'는 설치되어 있지 않습니다.` }
+        const msg = { error: 'NOT_INSTALLED', message: `'${slugInput}' is not installed.` }
         if (json) {
           console.error(JSON.stringify(msg))
         } else {
-          console.error(`\x1b[31m오류:\x1b[0m ${msg.message}`)
+          console.error(`\x1b[31mError:\x1b[0m ${msg.message}`)
         }
         process.exit(1)
       }
@@ -94,8 +94,8 @@ export function registerDeployRecord(program: Command): void {
       if (json) {
         console.log(JSON.stringify(result))
       } else {
-        const scopeLabel = scope === 'global' ? '글로벌' : '로컬'
-        console.log(`\x1b[32m✓ ${slug} 배치 정보 기록 완료\x1b[0m (${scopeLabel}, ${resolvedFiles.length}개 파일)`)
+        const scopeLabel = scope === 'global' ? 'global' : 'local'
+        console.log(`\x1b[32m✓ ${slug} deploy info recorded\x1b[0m (${scopeLabel}, ${resolvedFiles.length} files)`)
       }
     })
 }

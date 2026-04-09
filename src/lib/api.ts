@@ -21,7 +21,7 @@ export async function fetchAgentInfo(slug: string): Promise<AgentRegistryInfo> {
   const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`에이전트 정보 조회 실패 (${res.status}): ${body}`)
+    throw new Error(`Failed to fetch agent info (${res.status}): ${body}`)
   }
   return res.json() as Promise<AgentRegistryInfo>
 }
@@ -39,7 +39,7 @@ export async function searchAgents(
   const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`검색 실패 (${res.status}): ${body}`)
+    throw new Error(`Search failed (${res.status}): ${body}`)
   }
   const data = (await res.json()) as { results: SearchResult[] }
   return data.results
@@ -60,7 +60,7 @@ export async function fetchAgentVersions(slug: string): Promise<AgentVersionInfo
   const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`버전 목록 조회 실패 (${res.status}): ${body}`)
+    throw new Error(`Failed to fetch versions (${res.status}): ${body}`)
   }
   return res.json() as Promise<AgentVersionInfo[]>
 }
@@ -84,7 +84,7 @@ export async function reportInstall(agentId: string, slug: string, version?: str
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      console.error(`\x1b[33m⚠ 설치 카운트 업데이트 실패 (${res.status}): ${text}\x1b[0m`)
+      console.error(`\x1b[33m⚠ Failed to update install count (${res.status}): ${text}\x1b[0m`)
     }
   } catch {
     // network error: ignore silently
@@ -105,7 +105,7 @@ export async function resolveSlugFromServer(name: string): Promise<ResolvedSlug[
   if (token) headers['Authorization'] = `Bearer ${token}`
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(5000) })
   if (!res.ok) {
-    throw new Error(`slug resolve 실패 (${res.status})`)
+    throw new Error(`Slug resolve failed (${res.status})`)
   }
   const data = (await res.json()) as { results: ResolvedSlug[] }
   return data.results
@@ -121,7 +121,7 @@ export async function sendUsagePing(agentId: string | null, slug: string, versio
   // CLI version
   const pkg = require('../../package.json') as { version: string }
 
-  // agentId(UUID)가 있으면 UUID 경로, 없으면 slug name으로 fallback
+  // Use UUID path if agentId exists, otherwise fall back to slug name
   const pathParam = agentId || slug.replace(/^@/, '').split('/').pop() || slug
   const url = `${API_URL}/api/agents/${pathParam}/ping`
   const payload: Record<string, string> = { device_hash: deviceHash, slug, cli_version: pkg.version }
@@ -156,6 +156,6 @@ export async function followBuilder(username: string): Promise<void> {
   })
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`팔로우 실패 (${res.status}): ${body}`)
+    throw new Error(`Follow failed (${res.status}): ${body}`)
   }
 }
