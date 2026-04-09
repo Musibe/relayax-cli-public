@@ -31,7 +31,7 @@ export function registerVersions(program: Command): void {
             console.log(`    \x1b[90m${v.changelog}\x1b[0m`)
           }
         }
-        console.log(`\n\x1b[33m  특정 버전 설치: relay install ${resolved.full}@<version>\x1b[0m`)
+        console.log(`\n\x1b[33m  특정 버전 설치: anpm install ${resolved.full}@<version>\x1b[0m`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         if (json) {

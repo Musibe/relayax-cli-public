@@ -17,13 +17,13 @@ export interface ToolCommandAdapter {
 
 /**
  * 로컬 어댑터 — 프로젝트 디렉토리 기준.
- * {projectPath}/{skillsDir}/commands/relay/{id}.md
+ * {projectPath}/{skillsDir}/commands/anpm/{id}.md
  */
 export function createAdapter(tool: AITool): ToolCommandAdapter {
   return {
     toolId: tool.value,
     getFilePath(commandId: string): string {
-      return path.join(tool.skillsDir, 'commands', 'relay', `${commandId}.md`)
+      return path.join(tool.skillsDir, 'commands', 'anpm', `${commandId}.md`)
     },
     formatFile: formatCommandFile,
   }
@@ -47,17 +47,17 @@ export function getGlobalCommandDir(): string {
 
 /**
  * 특정 AI 도구의 글로벌 커맨드 디렉토리.
- * ~/{skillsDir}/commands/relay/
+ * ~/{skillsDir}/commands/anpm/
  */
 export function getGlobalCommandDirForTool(skillsDir: string): string {
-  return path.join(os.homedir(), skillsDir, 'commands', 'relay')
+  return path.join(os.homedir(), skillsDir, 'commands', 'anpm')
 }
 
 /**
  * 특정 AI 도구의 글로벌 커맨드 파일 경로.
  */
 export function getGlobalCommandPathForTool(skillsDir: string, commandId: string): string {
-  return path.join(os.homedir(), skillsDir, 'commands', 'relay', `${commandId}.md`)
+  return path.join(os.homedir(), skillsDir, 'commands', 'anpm', `${commandId}.md`)
 }
 
 /**
@@ -73,12 +73,12 @@ export function formatCommandFile(content: CommandContent): string {
 
 export const USER_COMMANDS: CommandContent[] = [
   {
-    id: 'relay-explore',
-    description: 'relay 마켓플레이스를 탐색하고 프로젝트에 맞는 에이전트를 찾습니다',
+    id: 'anpm-explore',
+    description: 'anpm 마켓플레이스를 탐색하고 프로젝트에 맞는 에이전트를 찾습니다',
     body: EXPLORE_PROMPT,
   },
   {
-    id: 'relay-status',
+    id: 'anpm-status',
     description: '설치된 에이전트와 Organization 현황을 확인합니다',
     body: `현재 설치된 에이전트와 소속 Organization 현황을 한눈에 보여줍니다.
 
@@ -86,7 +86,7 @@ export const USER_COMMANDS: CommandContent[] = [
 
 ### 1. 설치된 에이전트 목록
 
-\`relay list --json\` 명령어를 실행합니다.
+\`anpm list --json\` 명령어를 실행합니다.
 
 **JSON 응답 구조:**
 \`\`\`json
@@ -115,7 +115,7 @@ export const USER_COMMANDS: CommandContent[] = [
 
 ### 2. Organization 목록
 
-\`relay orgs list --json\` 명령어를 실행합니다.
+\`anpm orgs list --json\` 명령어를 실행합니다.
 
 **JSON 응답 구조:**
 \`\`\`json
@@ -136,19 +136,19 @@ export const USER_COMMANDS: CommandContent[] = [
 - Org 조회 실패해도 설치된 에이전트 목록은 정상 표시합니다 (로컬 데이터).
 
 ### 3. Org 에이전트 목록 (옵션)
-- \`--org <slug>\` 인자가 있으면: \`relay list --org <org-slug> --json\`으로 해당 Organization의 에이전트 목록도 보여줍니다.
+- \`--org <slug>\` 인자가 있으면: \`anpm list --org <org-slug> --json\`으로 해당 Organization의 에이전트 목록도 보여줍니다.
 
 ### 4. 안내
-- 설치된 에이전트가 없으면 \`/relay-explore\`로 에이전트를 탐색해보라고 안내합니다.
+- 설치된 에이전트가 없으면 \`/anpm-explore\`로 에이전트를 탐색해보라고 안내합니다.
 - Org가 있으면 활용법을 안내합니다:
-  - Org 에이전트 설치: \`relay install @<org-slug>/<agent>\`
-  - Org 관리: www.relayax.com/orgs/<slug>
+  - Org 에이전트 설치: \`anpm install @<org-slug>/<agent>\`
+  - Org 관리: www.anpm.io/orgs/<slug>
 
 ## 예시
 
-사용자: /relay-status
-→ relay list --json 실행
-→ relay orgs list --json 실행 (병렬 가능)
+사용자: /anpm-status
+→ anpm list --json 실행
+→ anpm orgs list --json 실행 (병렬 가능)
 
 **설치된 에이전트 (2개)**
 
@@ -161,20 +161,20 @@ export const USER_COMMANDS: CommandContent[] = [
 - acme-corp — Acme Corp (소유자)
 - dev-guild — Dev Guild (멤버)
 
-사용자: /relay-status --org acme-corp
-→ 위 정보 + \`relay list --org acme-corp --json\` 실행
+사용자: /anpm-status --org acme-corp
+→ 위 정보 + \`anpm list --org acme-corp --json\` 실행
 → acme-corp Organization에서 설치 가능한 에이전트 목록 추가 표시`,
   },
   {
-    id: 'relay-uninstall',
+    id: 'anpm-uninstall',
     description: '설치된 에이전트를 삭제합니다',
     body: `설치된 에이전트를 제거합니다. CLI가 패키지와 배치된 파일을 모두 정리합니다.
 
 ## 실행 방법
 
-1. \`relay uninstall <@author/slug> --json\` 명령어를 실행합니다.
+1. \`anpm uninstall <@author/slug> --json\` 명령어를 실행합니다.
 2. CLI가 자동으로 처리하는 것:
-   - \`.relay/agents/\` 패키지 삭제
+   - \`.anpm/agents/\` 패키지 삭제
    - \`deployed_files\`에 기록된 배치 파일 삭제 (에이전트 설정 디렉토리 내)
    - 빈 상위 디렉토리 정리
    - installed.json에서 항목 제거 (글로벌/로컬 양쪽)
@@ -182,20 +182,20 @@ export const USER_COMMANDS: CommandContent[] = [
 
 ## 예시
 
-사용자: /relay-uninstall @alice/doc-writer
-→ relay uninstall @alice/doc-writer --json 실행
+사용자: /anpm-uninstall @alice/doc-writer
+→ anpm uninstall @alice/doc-writer --json 실행
 → "✓ @alice/doc-writer 삭제 완료 (12개 파일 제거)"`,
   },
   {
-    id: 'relay-create',
-    description: '에이전트를 만들거나 업데이트하여 relay에 배포합니다',
+    id: 'anpm-create',
+    description: '에이전트를 만들거나 업데이트하여 anpm에 배포합니다',
     body: CREATE_PROMPT,
   },
 ]
 
 // ─── Builder Commands (로컬 설치) ───
-// relay-publish가 글로벌로 승격되어 현재 비어있음.
-// relay init --auto만 실행하면 모든 커맨드가 한번에 업데이트됨.
+// anpm-publish가 글로벌로 승격되어 현재 비어있음.
+// anpm init --auto만 실행하면 모든 커맨드가 한번에 업데이트됨.
 
 export const BUILDER_COMMANDS: CommandContent[] = []
 

@@ -51,7 +51,7 @@ export function registerSearch(program: Command): void {
           console.log(formatTable(results))
           console.log(`\n총 ${results.length}건`)
           if (!opts.space && results.length === 0) {
-            console.log('\x1b[33m💡 내 Space에서 검색하려면: relay search <keyword> --space <space-slug>\x1b[0m')
+            console.log('\x1b[33m💡 내 Space에서 검색하려면: anpm search <keyword> --space <space-slug>\x1b[0m')
           }
         }
       } catch (err) {

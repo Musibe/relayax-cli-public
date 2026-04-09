@@ -5,11 +5,11 @@
 현재 프로젝트의 기술 스택, 구조, 패턴을 파악합니다:
 - 사용 중인 프레임워크/라이브러리 (package.json, import 패턴)
 - 프로젝트 구조 (디렉토리 레이아웃, 주요 파일)
-- 기존 설치된 에이전트 (`relay list --json`)
+- 기존 설치된 에이전트 (`anpm list --json`)
 
 ## 에이전트 검색
 
-`relay search <keyword>` 명령어로 검색합니다.
+`anpm search <keyword>` 명령어로 검색합니다.
 프로젝트 컨텍스트에 맞는 키워드를 선택합니다 (기술 스택, 작업 유형 등).
 여러 키워드로 반복 검색하여 폭넓게 탐색합니다.
 
@@ -21,10 +21,10 @@
 
 ## 설치
 
-사용자가 선택하면 `relay install <slug>` 을 실행합니다.
+사용자가 선택하면 `anpm install <slug>` 을 실행합니다.
 
 scope 결정 기준:
-- 범용 도구 (코드 리뷰, 문서 생성, 테스트) → `relay install <slug>` (글로벌 기본)
-- 프로젝트 특화 (특정 프레임워크, 팀 컨벤션) → `relay install <slug> --local`
+- 범용 도구 (코드 리뷰, 문서 생성, 테스트) → `anpm install <slug>` (글로벌 기본)
+- 프로젝트 특화 (특정 프레임워크, 팀 컨벤션) → `anpm install <slug> --local`
 
 {{ERROR_HANDLING_GUIDE}}

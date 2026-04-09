@@ -19,6 +19,8 @@ export interface InstalledAgent {
   deployed_files?: string[];
   /** symlink 절대경로 목록 — relay install이 직접 기록 */
   deployed_symlinks?: string[];
+  /** 설치 소스: registry (기본), local:<path>, git:<url>#<ref>, link:<path>, adopted:<path> */
+  source?: string;
 }
 
 /** 키는 scoped slug 포맷: "@owner/name" */
@@ -56,6 +58,47 @@ export interface AgentRegistryInfo {
     display_name: string | null;
     contact_links: ContactItem[] | Record<string, string>;
   } | null;
+}
+
+// ─── Cloud Deploy Types ───
+
+export interface AgentDefinition {
+  system?: string
+  tools?: string[]
+  skills?: { name: string }[]
+  mcp_servers?: { name: string; url?: string }[]
+}
+
+export interface AnthropicCloudConfig {
+  model: string
+  networking?: 'unrestricted' | 'limited'
+  allowed_hosts?: string[]
+}
+
+export interface CloudConfig {
+  anthropic?: AnthropicCloudConfig
+  [provider: string]: unknown
+}
+
+export interface LocalConfig {
+  commands?: { name: string; description?: string }[]
+  scope?: 'global' | 'local'
+  harnesses?: string[]
+}
+
+export interface DeployRecord {
+  agent_id: string
+  agent_version: number
+  environment_id: string
+  skill_ids: string[]
+  deployed_at: string
+  manifest_hash: string
+}
+
+export interface DeployRegistry {
+  [scopedSlug: string]: {
+    [provider: string]: DeployRecord
+  }
 }
 
 export interface SearchResult {

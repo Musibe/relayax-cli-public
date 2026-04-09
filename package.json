@@ -1,10 +1,11 @@
 {
-  "name": "relayax-cli",
-  "version": "0.4.37",
-  "description": "RelayAX Agent Team Marketplace CLI - Install and manage agent teams",
+  "name": "anpm-io",
+  "version": "1.0.0",
+  "description": "anpm — the agent package manager",
   "main": "dist/index.js",
   "bin": {
-    "relay": "./dist/index.js"
+    "anpm": "./dist/index.js",
+    "relay": "./dist/relay-compat.js"
   },
   "files": [
     "dist",
@@ -25,14 +26,17 @@
     "claude",
     "llm",
     "ai-agent",
-    "relayax"
+    "relayax",
+    "anpm",
+    "agent-npm",
+    "package-manager"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Musibe/relayax-cli-public"
   },
-  "homepage": "https://relayax.com",
+  "homepage": "https://anpm.io",
   "dependencies": {
     "@inquirer/prompts": "^8.3.2",
     "@modelcontextprotocol/sdk": "^1.29.0",

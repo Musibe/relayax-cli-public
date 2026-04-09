@@ -97,6 +97,10 @@ export interface PublishMetadata {
   agent_details?: AgentDetail[]
   skill_details?: SkillDetail[]
   org_slug?: string
+  cloud_config?: {
+    supported_providers: string[]
+    [provider: string]: unknown
+  }
 }
 
 interface RelayYaml {
@@ -353,6 +357,30 @@ function listDir(agentDir: string, dirName: string): string[] {
 
 
 /**
+ * Extract cloud_config metadata from anpm.yaml for registry.
+ */
+function extractCloudConfig(config: RelayYaml): { cloud_config?: PublishMetadata['cloud_config'] } {
+  const cloud = (config as unknown as Record<string, unknown>).cloud as Record<string, unknown> | undefined
+  if (!cloud) return {}
+
+  const providers = Object.keys(cloud).filter(k => typeof cloud[k] === 'object')
+  if (providers.length === 0) return {}
+
+  const result: Record<string, unknown> = { supported_providers: providers }
+
+  for (const p of providers) {
+    const pConfig = cloud[p] as Record<string, unknown>
+    result[p] = {
+      model: pConfig.model,
+      has_custom_skills: fs.existsSync(path.join(process.cwd(), 'skills')) || fs.existsSync(path.join(process.cwd(), '.anpm', 'skills')),
+      skill_count: listDir(process.cwd(), 'skills').length || listDir(path.join(process.cwd(), '.anpm'), 'skills').length,
+    }
+  }
+
+  return { cloud_config: result as PublishMetadata['cloud_config'] }
+}
+
+/**
  * long_description을 결정한다.
  * 1. relay.yaml에 있으면 사용
  * 2. README.md가 있으면 fallback
@@ -413,16 +441,16 @@ export async function publishToApi(
 export function registerPublish(program: Command): void {
   program
     .command('publish')
-    .description('현재 에이전트 패키지를 Space에 배포합니다 (relay.yaml 필요)')
+    .description('현재 에이전트 패키지를 Space에 배포합니다 (anpm.yaml 필요)')
     .option('--token <token>', '인증 토큰')
     .option('--space <slug>', '배포할 Space 지정')
     .option('--org <slug>', 'Organization slug 지정')
     .option('--no-org', '개인 계정으로 배포 (Organization 무시)')
-    .option('--version <version>', '배포 버전 지정 (relay.yaml 업데이트)')
+    .option('--version <version>', '배포 버전 지정 (anpm.yaml 업데이트)')
     .option('--patch', 'patch 버전 범프')
     .option('--minor', 'minor 버전 범프')
     .option('--major', 'major 버전 범프')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
     .action(async (opts: { token?: string; space?: string; org?: string; noOrg?: boolean; version?: string; patch?: boolean; minor?: boolean; major?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const agentDir = resolveProjectPath(opts.project)
@@ -436,9 +464,9 @@ export function registerPublish(program: Command): void {
       if (isTTY) {
         const cliUpdate = await checkCliVersion(true)
         if (cliUpdate) {
-          console.error(`\n\x1b[33m⚠ relay v${cliUpdate.latest}이 있습니다\x1b[0m (현재 v${cliUpdate.current})`)
+          console.error(`\n\x1b[33m⚠ anpm v${cliUpdate.latest}이 있습니다\x1b[0m (현재 v${cliUpdate.current})`)
           console.error('  최신 버전에서는 설치자에게 자동 업데이트 알림이 지원됩니다.')
-          console.error(`  업데이트: \x1b[36mnpm update -g relayax-cli\x1b[0m\n`)
+          console.error(`  업데이트: \x1b[36mnpm update -g anpm-io\x1b[0m\n`)
         }
       }
 
@@ -448,8 +476,8 @@ export function registerPublish(program: Command): void {
           reportCliError('publish', 'NOT_INITIALIZED', 'relay.yaml missing')
           console.error(JSON.stringify({
             error: 'NOT_INITIALIZED',
-            message: '.relay/relay.yaml이 없습니다. 먼저 `relay create`를 실행하세요.',
-            fix: 'relay create 또는 .relay/relay.yaml을 생성하세요.',
+            message: '.relay/relay.yaml이 없습니다. 먼저 `anpm create`를 실행하세요.',
+            fix: 'anpm create 또는 anpm.yaml을 생성하세요.',
           }))
           process.exit(1)
         }
@@ -494,9 +522,9 @@ export function registerPublish(program: Command): void {
         })
 
         if (visibility === 'private') {
-          console.error('\x1b[2m💡 비공개 에이전트는 웹 대시보드에서 허가된 사용자를 관리하세요: www.relayax.com/dashboard\x1b[0m')
+          console.error('\x1b[2m💡 비공개 에이전트는 웹 대시보드에서 허가된 사용자를 관리하세요: www.anpm.io/dashboard\x1b[0m')
         } else if (visibility === 'internal') {
-          console.error('\x1b[2m💡 내부 에이전트는 조직 멤버 전체가 사용할 수 있습니다: www.relayax.com/dashboard/agents\x1b[0m')
+          console.error('\x1b[2m💡 내부 에이전트는 조직 멤버 전체가 사용할 수 있습니다: www.anpm.io/dashboard/agents\x1b[0m')
         }
         console.error('')
 
@@ -526,8 +554,8 @@ export function registerPublish(program: Command): void {
         reportCliError('publish', 'INVALID_CONFIG', 'missing name/slug/description')
         console.error(JSON.stringify({
           error: 'INVALID_CONFIG',
-          message: 'relay.yaml에 name, slug, description이 필요합니다.',
-          fix: 'relay.yaml에 name, slug, description을 확인하세요.',
+          message: 'anpm.yaml에 name, slug, description이 필요합니다.',
+          fix: 'anpm.yaml에 name, slug, description을 확인하세요.',
         }))
         process.exit(1)
       }
@@ -554,7 +582,7 @@ export function registerPublish(program: Command): void {
         yamlData.version = newVersion
         fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
         if (!json) {
-          console.error(`  → relay.yaml에 version: ${newVersion} 저장됨\n`)
+          console.error(`  → anpm.yaml에 version: ${newVersion} 저장됨\n`)
         }
       } else if (isTTY) {
         const { select: promptVersion } = await import('@inquirer/prompts')
@@ -578,7 +606,7 @@ export function registerPublish(program: Command): void {
           const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
           yamlData.version = newVersion
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-          console.error(`  → relay.yaml에 version: ${newVersion} 저장됨\n`)
+          console.error(`  → anpm.yaml에 version: ${newVersion} 저장됨\n`)
         }
       }
 
@@ -620,13 +648,13 @@ export function registerPublish(program: Command): void {
       }
 
       // Get token (checked before tarball creation)
-      const token = opts.token ?? process.env.RELAY_TOKEN ?? await getValidToken()
+      const token = opts.token ?? process.env.ANPM_TOKEN ?? process.env.RELAY_TOKEN ?? await getValidToken()
       if (!token) {
         reportCliError('publish', 'NO_TOKEN', 'auth required')
         console.error(JSON.stringify({
           error: 'NO_TOKEN',
-          message: '인증이 필요합니다. `relay login`을 먼저 실행하세요.',
-          fix: 'relay login 실행 후 재시도하세요.',
+          message: '인증이 필요합니다. `anpm login`을 먼저 실행하세요.',
+          fix: 'anpm login 실행 후 재시도하세요.',
         }))
         process.exit(1)
       }
@@ -705,7 +733,7 @@ export function registerPublish(program: Command): void {
           console.error(JSON.stringify({
             error: 'MISSING_ORG',
             message: '배포 대상을 선택하세요.',
-            fix: `개인 배포: relay publish --no-org --json / Org 배포: relay publish --org <slug> --json`,
+            fix: `개인 배포: anpm publish --no-org --json / Org 배포: anpm publish --org <slug> --json`,
             options: [
               { value: '__personal__', label: '개인 계정으로 배포' },
               ...orgs.map((o) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
@@ -730,7 +758,7 @@ export function registerPublish(program: Command): void {
       if (!config.visibility) {
         if (isTTY) {
           const { select: promptSelect } = await import('@inquirer/prompts')
-          console.error(`\n\x1b[33m⚠ relay.yaml에 visibility가 설정되지 않았습니다.\x1b[0m  (기본값: ${defaultVisibility === 'public' ? '공개' : '비공개'})`)
+          console.error(`\n\x1b[33m⚠ anpm.yaml에 visibility가 설정되지 않았습니다.\x1b[0m  (기본값: ${defaultVisibility === 'public' ? '공개' : '비공개'})`)
 
           const visChoices: { name: string; value: 'public' | 'private' | 'internal' }[] = hasOrg
             ? [
@@ -769,7 +797,7 @@ export function registerPublish(program: Command): void {
           const yamlData = yaml.load(yamlContent) as Record<string, unknown>
           yamlData.visibility = config.visibility
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-          console.error(`  → relay.yaml에 visibility: ${config.visibility} 저장됨\n`)
+          console.error(`  → anpm.yaml에 visibility: ${config.visibility} 저장됨\n`)
         } else {
           reportCliError('publish', 'MISSING_VISIBILITY', 'visibility not set in relay.yaml')
           const visOptions: { value: string; label: string }[] = hasOrg
@@ -786,7 +814,7 @@ export function registerPublish(program: Command): void {
           }
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
-            message: 'relay.yaml에 visibility를 설정해주세요.',
+            message: 'anpm.yaml에 visibility를 설정해주세요.',
             options: visOptions,
             fix: 'relay.yaml의 visibility 필드를 위 옵션 중 하나로 설정하세요.',
           }))
@@ -843,7 +871,7 @@ export function registerPublish(program: Command): void {
           const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
           yamlData.visibility = config.visibility
           fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-          console.error(`  → relay.yaml에 visibility: ${config.visibility} 저장됨 (${visLabelMap[config.visibility]})\n`)
+          console.error(`  → anpm.yaml에 visibility: ${config.visibility} 저장됨 (${visLabelMap[config.visibility]})\n`)
         }
       }
 
@@ -865,7 +893,7 @@ export function registerPublish(program: Command): void {
             const yamlData = yaml.load(fs.readFileSync(relayYamlPath, 'utf-8')) as Record<string, unknown>
             yamlData.requires = config.requires
             fs.writeFileSync(relayYamlPath, yaml.dump(yamlData, { lineWidth: 120 }), 'utf-8')
-            console.error('  → relay.yaml에 requires 업데이트됨\n')
+            console.error('  → anpm.yaml에 requires 업데이트됨\n')
           }
         }
       }
@@ -917,6 +945,7 @@ export function registerPublish(program: Command): void {
         skill_details: detectedSkills,
         ...(selectedOrgId ? { org_id: selectedOrgId } : {}),
         ...(selectedOrgSlug ? { org_slug: selectedOrgSlug } : {}),
+        ...extractCloudConfig(config),
       }
 
       if (!json) {
@@ -984,7 +1013,7 @@ export function registerPublish(program: Command): void {
               console.log(JSON.stringify({ error: 'GIT_PUSH_FAILED', message: `git push 실패: ${gpMsg}` }))
             } else {
               console.error(`\x1b[31m✖ git push 실패: ${gpMsg}\x1b[0m`)
-              console.error('\x1b[33m  재시도하려면 relay publish를 다시 실행하세요.\x1b[0m')
+              console.error('\x1b[33m  재시도하려면 anpm publish를 다시 실행하세요.\x1b[0m')
             }
             process.exit(1)
           }
@@ -1020,9 +1049,9 @@ export function registerPublish(program: Command): void {
             const visibility = config.visibility ?? 'public'
             let npxInstallCmd: string
             if ((visibility === 'internal' || visibility === 'private') && accessCode) {
-              npxInstallCmd = `npx relayax-cli install ${result.slug} --code ${accessCode}`
+              npxInstallCmd = `npx anpm-io install ${result.slug} --code ${accessCode}`
             } else {
-              npxInstallCmd = `npx relayax-cli install ${result.slug}`
+              npxInstallCmd = `npx anpm-io install ${result.slug}`
             }
 
             // ── 공유 텍스트 (박스, 그대로 복붙) ──
@@ -1032,7 +1061,7 @@ export function registerPublish(program: Command): void {
                 ``,
                 npxInstallCmd,
                 ``,
-                `소개: https://relayax.com/@${detailSlug}`,
+                `소개: https://anpm.io/@${detailSlug}`,
               ]
 
               const maxLen = Math.max(...shareBlock.map((l) => l.length))

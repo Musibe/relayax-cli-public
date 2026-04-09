@@ -60,7 +60,7 @@ export function registerUpdate(program: Command): void {
         if (visibility === 'internal') {
           const token = await getValidToken()
           if (!token) {
-            console.error('이 에이전트는 Org 멤버만 업데이트할 수 있습니다. `relay login`을 먼저 실행하세요.')
+            console.error('이 에이전트는 Org 멤버만 업데이트할 수 있습니다. `anpm login`을 먼저 실행하세요.')
             process.exit(1)
           }
         }
@@ -95,7 +95,7 @@ export function registerUpdate(program: Command): void {
           checkGitInstalled()
           await clonePackage(agent.git_url, agentDir)
         } else {
-          throw new Error('이 에이전트는 재설치가 필요합니다. relay install로 다시 설치하세요.')
+          throw new Error('이 에이전트는 재설치가 필요합니다. anpm install로 다시 설치하세요.')
         }
 
         // Inject preamble
@@ -167,7 +167,7 @@ export function registerUpdate(program: Command): void {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error(JSON.stringify({ error: 'UPDATE_FAILED', message, fix: 'npm update -g relayax-cli로 수동 업데이트하세요.' }))
+        console.error(JSON.stringify({ error: 'UPDATE_FAILED', message, fix: 'npm update -g anpm-io로 수동 업데이트하세요.' }))
         process.exit(1)
       } finally {
         removeTempDir(tempDir)

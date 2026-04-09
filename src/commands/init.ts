@@ -20,19 +20,19 @@ const pkg = require('../../package.json') as { version: string }
 function showWelcome(): void {
   const lines = [
     '',
-    '  \x1b[33m⚡\x1b[0m \x1b[1mrelay\x1b[0m — Agent Marketplace',
+    '  \x1b[33m⚡\x1b[0m \x1b[1manpm\x1b[0m — Agent Marketplace',
     '',
-    '  에이전트 CLI에 relay 커맨드를 연결합니다.',
+    '  에이전트 CLI에 anpm 커맨드를 연결합니다.',
     '',
     '  \x1b[2mUser 커맨드 (글로벌)\x1b[0m',
-    '  /relay-explore     에이전트 탐색 & 추천',
-    '  /relay-create      에이전트 생성 & 배포',
-    '  /relay-status      설치 현황 & Organization',
-    '  /relay-uninstall   에이전트 삭제',
+    '  /anpm-explore     에이전트 탐색 & 추천',
+    '  /anpm-create      에이전트 생성 & 배포',
+    '  /anpm-status      설치 현황 & Organization',
+    '  /anpm-uninstall   에이전트 삭제',
     '',
     '  \x1b[2mCLI 명령어\x1b[0m',
-    '  relay install      에이전트 설치 (CLI 한 줄 완결)',
-    '  relay publish      재배포 (--patch/--minor/--major)',
+    '  anpm install      에이전트 설치 (CLI 한 줄 완결)',
+    '  anpm publish      재배포 (--patch/--minor/--major)',
     '',
   ]
   console.log(lines.join('\n'))
@@ -40,13 +40,13 @@ function showWelcome(): void {
 
 /**
  * 글로벌 User 커맨드를 감지된 모든 에이전트 CLI에 설치한다.
- * ~/{skillsDir}/commands/relay/ 에 설치.
+ * ~/{skillsDir}/commands/anpm/ 에 설치.
  * 기존 파일 중 현재 커맨드 목록에 없는 것은 제거한다.
  */
 /** 제거된 레거시 커맨드 → 대체 안내 매핑 */
 const LEGACY_COMMANDS: Record<string, string> = {
-  'relay-install': 'relay install (CLI) 또는 /relay-explore',
-  'relay-publish': 'relay publish --patch (CLI) 또는 /relay-create',
+  'relay-install': 'anpm install (CLI) 또는 /anpm-explore',
+  'relay-publish': 'anpm publish --patch (CLI) 또는 /anpm-create',
 }
 
 export function installGlobalUserCommands(overrideTools?: AITool[]): { installed: boolean; commands: string[]; tools: string[]; removed: string[] } {
@@ -107,11 +107,11 @@ export function hasGlobalUserCommands(overrideTools?: AITool[]): boolean {
 export function registerInit(program: Command): void {
   program
     .command('init')
-    .description('에이전트 CLI에 relay 슬래시 커맨드를 설치합니다')
+    .description('에이전트 CLI에 anpm 슬래시 커맨드를 설치합니다')
     .option('--tools <tools>', '설치할 에이전트 CLI 지정 (쉼표 구분)')
     .option('--all', '감지된 모든 에이전트 CLI에 설치')
     .option('--auto', '대화형 프롬프트 없이 자동으로 모든 감지된 CLI에 설치')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
     .action(async (opts: { tools?: string; all?: boolean; auto?: boolean; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
@@ -130,7 +130,7 @@ export function registerInit(program: Command): void {
         console.error(JSON.stringify({
           error: 'MISSING_TOOLS',
           message: '설치할 에이전트 CLI를 선택하세요.',
-          fix: `relay init --tools <도구1,도구2> --json 또는 relay init --all --json`,
+          fix: `anpm init --tools <도구1,도구2> --json 또는 anpm init --all --json`,
           options: detectedOptions,
         }))
         process.exit(1)
@@ -150,7 +150,7 @@ export function registerInit(program: Command): void {
 
         // Register relay-core in installed.json
         const installed = loadInstalled()
-        installed['relay-core'] = {
+        installed['anpm-core'] = {
           version: pkg.version,
           installed_at: new Date().toISOString(),
           files: result.commands.map((c) => getGlobalCommandPath(c)),
@@ -174,7 +174,7 @@ export function registerInit(program: Command): void {
           },
         }))
       } else {
-        console.log(`\n\x1b[32m✓ relay 초기화 완료\x1b[0m\n`)
+        console.log(`\n\x1b[32m✓ anpm 초기화 완료\x1b[0m\n`)
 
         // 레거시 커맨드 마이그레이션 안내
         if (removedCommands.length > 0) {
@@ -196,7 +196,7 @@ export function registerInit(program: Command): void {
           console.log()
         }
 
-        console.log('  에이전트를 만들려면 \x1b[33mrelay create <name>\x1b[0m을 사용하세요.')
+        console.log('  에이전트를 만들려면 \x1b[33manpm create <name>\x1b[0m을 사용하세요.')
         console.log()
         console.log('  IDE를 재시작하면 슬래시 커맨드가 활성화됩니다.')
       }

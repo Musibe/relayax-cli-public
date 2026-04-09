@@ -34,10 +34,10 @@ export function registerOrgs(program: Command): void {
       const token = await getValidToken()
       if (!token) {
         if (json) {
-          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'relay login 실행 후 재시도하세요.' }))
+          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'anpm login 실행 후 재시도하세요.' }))
         } else {
           console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
-          console.error('  relay login을 먼저 실행하세요.')
+          console.error('  anpm login을 먼저 실행하세요.')
         }
         process.exit(1)
       }
@@ -52,7 +52,7 @@ export function registerOrgs(program: Command): void {
 
         if (orgs.length === 0) {
           console.log('\nOrganization이 없습니다.')
-          console.log('\x1b[33m  Organization을 만들려면: relay orgs create "이름"\x1b[0m')
+          console.log('\x1b[33m  Organization을 만들려면: anpm orgs create "이름"\x1b[0m')
         } else {
           console.log(`\n\x1b[1m내 Organization\x1b[0m (${orgs.length}개):\n`)
           for (const o of orgs) {
@@ -87,7 +87,7 @@ export function registerOrgs(program: Command): void {
       const token = await getValidToken()
       if (!token) {
         if (json) {
-          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'relay login 실행 후 재시도하세요.' }))
+          console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'anpm login 실행 후 재시도하세요.' }))
         } else {
           console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
         }
@@ -123,8 +123,8 @@ export function registerOrgs(program: Command): void {
           console.log(JSON.stringify({ status: 'created', org }))
         } else {
           console.log(`\x1b[32m✅ Organization "${org.name}" (@${org.slug}) 생성 완료\x1b[0m`)
-          console.log(`\n\x1b[33m  에이전트 배포: relay publish --org ${org.slug}\x1b[0m`)
-          console.log(`\x1b[33m  멤버 초대: www.relayax.com/orgs/${org.slug}/members\x1b[0m`)
+          console.log(`\n\x1b[33m  에이전트 배포: anpm publish --org ${org.slug}\x1b[0m`)
+          console.log(`\x1b[33m  멤버 초대: www.anpm.io/orgs/${org.slug}/members\x1b[0m`)
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

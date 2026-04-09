@@ -86,9 +86,9 @@ export async function createAccessCode(opts: {
 function ensureInit(json: boolean): void {
   if (!hasGlobalUserCommands()) {
     if (json) {
-      console.error(JSON.stringify({ error: 'NOT_INITIALIZED', message: 'relay init을 먼저 실행하세요.', fix: 'relay init 실행하세요.' }))
+      console.error(JSON.stringify({ error: 'NOT_INITIALIZED', message: 'anpm init을 먼저 실행하세요.', fix: 'anpm init 실행하세요.' }))
     } else {
-      console.error('\x1b[33m⚠ relay init이 실행되지 않았습니다. 먼저 relay init을 실행하세요.\x1b[0m')
+      console.error('\x1b[33m⚠ anpm init이 실행되지 않았습니다. 먼저 anpm init을 실행하세요.\x1b[0m')
     }
     process.exit(1)
   }
@@ -99,10 +99,10 @@ function handleError(err: unknown, json: boolean): never {
 
   if (message === 'LOGIN_REQUIRED') {
     if (json) {
-      console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'relay login 실행 후 재시도하세요.' }))
+      console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다.', fix: 'anpm login 실행 후 재시도하세요.' }))
     } else {
       console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
-      console.error('  relay login 을 먼저 실행하세요.')
+      console.error('  anpm login 을 먼저 실행하세요.')
     }
     process.exit(1)
   }
@@ -209,7 +209,7 @@ export function registerGrant(program: Command): void {
           console.log(`\n  코드: \x1b[36m${result.code}\x1b[0m`)
           if (result.max_uses) console.log(`  최대 사용: ${result.max_uses}회`)
           if (result.expires_at) console.log(`  만료: ${new Date(result.expires_at).toLocaleDateString('ko-KR')}`)
-          console.log(`\n  \x1b[90m사용 방법: relay grant use --code ${result.code}\x1b[0m`)
+          console.log(`\n  \x1b[90m사용 방법: anpm grant use --code ${result.code}\x1b[0m`)
         }
       } catch (err) {
         handleError(err, json)

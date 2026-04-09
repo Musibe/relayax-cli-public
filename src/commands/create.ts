@@ -12,7 +12,7 @@ import { installGlobalUserCommands, hasGlobalUserCommands } from './init.js'
 import { slugify } from '../lib/slug.js'
 import { resolveProjectPath } from '../lib/paths.js'
 
-const DEFAULT_DIRS = ['.relay/skills', '.relay/commands'] as const
+const DEFAULT_DIRS = ['.anpm/skills', '.anpm/commands'] as const
 
 /**
  * 글로벌 User 커맨드가 없으면 설치한다.
@@ -31,21 +31,21 @@ export function registerCreate(program: Command): void {
     .option('--slug <slug>', 'URL용 식별자 (영문 소문자, 숫자, 하이픈)')
     .option('--tags <tags>', '태그 (쉼표 구분)')
     .option('--visibility <visibility>', '공개 범위 (public, private, internal)')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
+    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: ANPM_PROJECT_PATH)')
     .action(async (name: string, opts: { description?: string; slug?: string; tags?: string; visibility?: string; project?: string }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       trackCommand('create')
       const projectPath = resolveProjectPath(opts.project)
-      const relayDir = path.join(projectPath, '.relay')
-      const relayYamlPath = path.join(relayDir, 'relay.yaml')
+      const relayDir = path.join(projectPath, '.anpm')
+      const relayYamlPath = path.join(relayDir, 'anpm.yaml')
       const isTTY = Boolean(process.stdin.isTTY) && !json
 
-      // 1. .relay/relay.yaml 이미 존재하면 에러
+      // 1. .anpm/anpm.yaml 이미 존재하면 에러
       if (fs.existsSync(relayYamlPath)) {
         if (json) {
-          console.error(JSON.stringify({ error: 'ALREADY_EXISTS', message: '.relay/relay.yaml이 이미 존재합니다.', fix: '기존 .relay/relay.yaml을 확인하세요. 새로 시작하려면 삭제 후 재시도.' }))
+          console.error(JSON.stringify({ error: 'ALREADY_EXISTS', message: '.anpm/anpm.yaml이 이미 존재합니다.', fix: '기존 .anpm/anpm.yaml을 확인하세요. 새로 시작하려면 삭제 후 재시도.' }))
         } else {
-          console.error('.relay/relay.yaml이 이미 존재합니다. 기존 에이전트 프로젝트에서는 `relay init`을 사용하세요.')
+          console.error('.anpm/anpm.yaml이 이미 존재합니다. 기존 에이전트 프로젝트에서는 `anpm init`을 사용하세요.')
         }
         process.exit(1)
       }
@@ -63,7 +63,7 @@ export function registerCreate(program: Command): void {
           console.error(JSON.stringify({
             error: 'INVALID_SLUG',
             message: '이름에서 유효한 slug를 생성할 수 없습니다. 영문 이름을 사용하거나 --slug 옵션을 지정하세요.',
-            fix: `relay create "${name}" --slug <영문-slug> --description <설명> --json`,
+            fix: `anpm create "${name}" --slug <영문-slug> --description <설명> --json`,
           }))
           process.exit(1)
         }
@@ -72,7 +72,7 @@ export function registerCreate(program: Command): void {
           console.error(JSON.stringify({
             error: 'MISSING_FIELD',
             message: '에이전트 설명이 필요합니다.',
-            fix: `relay create ${name} --description <설명> --json`,
+            fix: `anpm create ${name} --description <설명> --json`,
             field: 'description',
           }))
           process.exit(1)
@@ -81,7 +81,7 @@ export function registerCreate(program: Command): void {
           console.error(JSON.stringify({
             error: 'MISSING_VISIBILITY',
             message: '공개 범위를 선택하세요.',
-            fix: `relay create ${name} --description "${description}" --visibility <visibility> --json`,
+            fix: `anpm create ${name} --description "${description}" --visibility <visibility> --json`,
             options: [
               { value: 'public', label: '공개 — 누구나 검색 및 설치 가능' },
               { value: 'private', label: '비공개 — 허가 코드 등록자만 사용 가능' },
@@ -106,7 +106,7 @@ export function registerCreate(program: Command): void {
       } else if (isTTY) {
         const { input: promptInput, select: promptSelect } = await import('@inquirer/prompts')
 
-        console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1mrelay create\x1b[0m — 새 에이전트 프로젝트\n`)
+        console.log(`\n  \x1b[33m⚡\x1b[0m \x1b[1manpm create\x1b[0m — 새 에이전트 프로젝트\n`)
 
         // slug가 비어있으면 (한국어 등 비ASCII 이름) slug를 직접 입력받음
         if (!slug) {
@@ -210,7 +210,7 @@ export function registerCreate(program: Command): void {
           name,
           slug: slug,
           recommended_scope: recommendedScope,
-          relay_yaml: 'created',
+          anpm_yaml: 'created',
           directories: createdDirs,
           local_commands: localResults,
           global_commands: globalInstalled ? 'installed' : 'already',
@@ -219,7 +219,7 @@ export function registerCreate(program: Command): void {
         const scopeLabel = recommendedScope === 'global' ? '\x1b[32m글로벌\x1b[0m' : '\x1b[33m로컬\x1b[0m'
         const scopeReason = hasRules ? 'rules/ 감지' : hasFrameworkTag ? '프레임워크 태그 감지' : '범용 에이전트'
         console.log(`\n\x1b[32m✓ ${name} 에이전트 프로젝트 생성 완료\x1b[0m\n`)
-        console.log(`  .relay/relay.yaml 생성됨`)
+        console.log(`  .anpm/anpm.yaml 생성됨`)
         console.log(`  recommended_scope: ${scopeLabel} (${scopeReason})`)
         if (createdDirs.length > 0) {
           console.log(`  디렉토리 생성: ${createdDirs.join(', ')}`)
@@ -236,7 +236,7 @@ export function registerCreate(program: Command): void {
           console.log(`\n  \x1b[36mUser 커맨드 (글로벌)\x1b[0m — 설치됨`)
         }
 
-        console.log(`\n  다음 단계: \x1b[33m/relay-publish\x1b[0m로 Space에 배포`)
+        console.log(`\n  다음 단계: \x1b[33m/anpm-create\x1b[0m로 Space에 배포`)
         console.log('  IDE를 재시작하면 슬래시 커맨드가 활성화됩니다.\n')
       }
     })

@@ -393,7 +393,7 @@ export function initGlobalAgentHome(slug: string, yamlData: Record<string, unkno
 
 export function registerPackage(program: Command): void {
   program
-    .command('package')
+    .command('package', { hidden: true })
     .description('소스 디렉토리에서 .relay/로 콘텐츠를 동기화합니다')
     .option('--source <dir>', '소스 디렉토리 지정 (예: .claude)')
     .option('--sync', '변경사항을 .relay/에 즉시 반영', false)
@@ -527,7 +527,7 @@ export function registerPackage(program: Command): void {
           if (json) {
             console.log(JSON.stringify({ status: 'no_source', message: 'source 필드가 없습니다.' }))
           } else {
-            console.error('source 필드가 없습니다. relay package --init으로 초기화하세요.')
+            console.error('source 필드가 없습니다. anpm package --init으로 초기화하세요.')
           }
           process.exit(1)
         }
@@ -581,7 +581,7 @@ export function registerPackage(program: Command): void {
           }))
         } else {
           console.error(`relay.yaml에 기존 source 필드(${legacySource})가 있습니다.`)
-          console.error(`contents 형식으로 마이그레이션하려면: relay package --migrate`)
+          console.error(`contents 형식으로 마이그레이션하려면: anpm package --migrate`)
         }
         process.exit(1)
       }
@@ -590,11 +590,11 @@ export function registerPackage(program: Command): void {
         if (json) {
           console.log(JSON.stringify({
             status: 'no_contents',
-            message: 'relay.yaml에 contents가 없습니다. relay package --init으로 패키지를 초기화하세요.',
+            message: 'relay.yaml에 contents가 없습니다. anpm package --init으로 패키지를 초기화하세요.',
           }))
         } else {
           console.error('relay.yaml에 contents가 없습니다.')
-          console.error('relay package --init으로 패키지를 초기화하세요.')
+          console.error('anpm package --init으로 패키지를 초기화하세요.')
         }
         process.exit(1)
       }
@@ -674,7 +674,7 @@ export function registerPackage(program: Command): void {
         if (opts.sync) {
           console.error('\n✓ .relay/에 반영 완료')
         } else if (hasChanges) {
-          console.error('\n반영하려면: relay package --sync')
+          console.error('\n반영하려면: anpm package --sync')
         }
       }
     })

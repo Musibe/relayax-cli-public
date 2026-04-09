@@ -1,6 +1,8 @@
+import fs from 'fs'
 import { Command } from 'commander'
 import { loadMergedInstalled, getValidToken, API_URL } from '../lib/config.js'
 import type { InstalledAgent } from '../types.js'
+import { AI_TOOLS } from '../lib/ai-tools.js'
 
 interface OrgAgentEntry {
   slug: string
@@ -24,9 +26,10 @@ async function fetchOrgAgentList(orgSlug: string, token: string): Promise<OrgAge
 export function registerList(program: Command): void {
   program
     .command('list')
-    .description('설치된 에이전트 목록')
-    .option('--org <slug>', 'Organization 에이전트 목록 조회')
-    .action(async (opts: { org?: string }) => {
+    .description('List installed agents')
+    .option('--org <slug>', 'List organization agents')
+    .option('--detail', 'Show file-level symlink mapping per agent')
+    .action(async (opts: { org?: string; detail?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
       // --org 옵션: Org 에이전트 목록
@@ -36,10 +39,10 @@ export function registerList(program: Command): void {
         const token = await getValidToken()
         if (!token) {
           if (json) {
-            console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다. relay login을 먼저 실행하세요.', fix: 'relay login 실행 후 재시도하세요.' }))
+            console.error(JSON.stringify({ error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다. anpm login을 먼저 실행하세요.', fix: 'anpm login 실행 후 재시도하세요.' }))
           } else {
             console.error('\x1b[31m오류: 로그인이 필요합니다.\x1b[0m')
-            console.error('  relay login을 먼저 실행하세요.')
+            console.error('  anpm login을 먼저 실행하세요.')
           }
           process.exit(1)
         }
@@ -64,7 +67,7 @@ export function registerList(program: Command): void {
               : ''
             console.log(`  \x1b[36m@${t.owner}/${t.slug}\x1b[0m  \x1b[1m${t.name}\x1b[0m${desc}`)
           }
-          console.log(`\n\x1b[33m  설치: relay install @${orgSlug}/<에이전트슬러그>\x1b[0m`)
+          console.log(`\n\x1b[33m  설치: anpm install @${orgSlug}/<에이전트슬러그>\x1b[0m`)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           if (json) {
@@ -87,6 +90,8 @@ export function registerList(program: Command): void {
         scope: 'global' | 'local'
         deploy_scope?: string
         org_slug?: string
+        source?: string
+        symlinks?: string[]
       }
 
       const allEntries: ListEntry[] = []
@@ -101,11 +106,13 @@ export function registerList(program: Command): void {
           scope: 'global',
           deploy_scope: info.deploy_scope,
           org_slug: info.org_slug,
+          source: info.source,
+          symlinks: info.deployed_symlinks,
         })
         seen.add(slug)
       }
 
-      // 로컬 (글로벌과 중복되지 않는 것만)
+      // Local (not already in global)
       for (const [slug, info] of Object.entries(localInstalled) as [string, InstalledAgent][]) {
         if (seen.has(slug)) continue
         allEntries.push({
@@ -115,6 +122,8 @@ export function registerList(program: Command): void {
           scope: 'local',
           deploy_scope: info.deploy_scope,
           org_slug: info.org_slug,
+          source: info.source,
+          symlinks: info.deployed_symlinks,
         })
       }
 
@@ -122,19 +131,36 @@ export function registerList(program: Command): void {
         console.log(JSON.stringify({ installed: allEntries }))
       } else {
         if (allEntries.length === 0) {
-          console.log('\n설치된 에이전트가 없습니다. `relay install <slug>`로 설치하세요.')
+          console.log('\nNo agents installed. Run `anpm install <slug>` to install one.')
           return
         }
-        console.log(`\n설치된 에이전트 (${allEntries.length}개):\n`)
+        console.log(`\nInstalled agents (${allEntries.length}):\n`)
         for (const item of allEntries) {
-          const date = new Date(item.installed_at).toLocaleDateString('ko-KR')
+          const date = new Date(item.installed_at).toLocaleDateString('en-US')
           const scopeLabel = item.deploy_scope === 'global'
-            ? '\x1b[32m글로벌\x1b[0m'
+            ? '\x1b[32mglobal\x1b[0m'
             : item.deploy_scope === 'local'
-              ? '\x1b[33m로컬\x1b[0m'
-              : '\x1b[90m미배치\x1b[0m'
+              ? '\x1b[33mlocal\x1b[0m'
+              : '\x1b[90m—\x1b[0m'
+          const sourceLabel = item.source
+            ? `  \x1b[90m${item.source.split(':')[0]}\x1b[0m`
+            : ''
           const orgLabel = item.org_slug ? `  \x1b[90m[Org: ${item.org_slug}]\x1b[0m` : ''
-          console.log(`  \x1b[36m${item.slug}\x1b[0m  v${item.version}  ${scopeLabel}  (${date})${orgLabel}`)
+          console.log(`  \x1b[36m${item.slug}\x1b[0m  v${item.version}  ${scopeLabel}${sourceLabel}  (${date})${orgLabel}`)
+
+          // --detail: show per-file symlink mapping
+          if (opts.detail && item.symlinks && item.symlinks.length > 0) {
+            for (const link of item.symlinks) {
+              const exists = fs.existsSync(link)
+              const icon = exists ? '✅' : '❌'
+              // Extract harness + content type from path
+              const harnessName = AI_TOOLS.find((t) => link.includes(t.skillsDir))?.name ?? '?'
+              const parts = link.split('/')
+              const contentIdx = parts.findIndex((p) => ['skills', 'commands', 'rules', 'agents'].includes(p))
+              const contentLabel = contentIdx >= 0 ? parts.slice(contentIdx).join('/') : link
+              console.log(`    ${icon} ${contentLabel}  \x1b[90m→ ${harnessName}\x1b[0m`)
+            }
+          }
         }
       }
     })

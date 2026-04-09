@@ -5,7 +5,7 @@ import { isScopedSlug, parseSlug } from '../lib/slug.js'
 
 export function registerPing(program: Command): void {
   program
-    .command('ping <slug>')
+    .command('ping <slug>', { hidden: true })
     .description('사용 현황을 기록합니다 (preamble용 경량 명령)')
     .option('--quiet', '출력 없이 실행')
     .action(async (slugInput: string, opts: { quiet?: boolean }) => {

@@ -149,7 +149,7 @@ export async function followBuilder(username: string): Promise<void> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  const res = await fetch(`https://www.relayax.com/api/follows`, {
+  const res = await fetch(`https://www.anpm.io/api/follows`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ following_username: username, email_opt_in: true }),

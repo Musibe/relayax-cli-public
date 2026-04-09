@@ -4,9 +4,11 @@ import os from 'os'
 import type { InstalledRegistry } from '../types.js'
 import { detectAgentCLIs } from './ai-tools.js'
 
-export const API_URL = 'https://www.relayax.com'
+import { getRegistryUrl } from './anpm-config.js'
 
-const GLOBAL_RELAY_DIR = path.join(process.env.RELAY_HOME ?? os.homedir(), '.relay')
+export const API_URL = getRegistryUrl()
+
+const GLOBAL_ANPM_DIR = path.join(process.env.ANPM_HOME ?? process.env.RELAY_HOME ?? os.homedir(), '.anpm')
 
 /**
  * 설치 경로를 결정한다.
@@ -33,10 +35,10 @@ export function getInstallPath(override?: string): string {
   return projectRoot
 }
 
-/** ~/.relay/ — 글로벌 (token, CLI cache) */
-export function ensureGlobalRelayDir(): void {
-  if (!fs.existsSync(GLOBAL_RELAY_DIR)) {
-    fs.mkdirSync(GLOBAL_RELAY_DIR, { recursive: true })
+/** ~/.anpm/ — 글로벌 (token, CLI cache) */
+export function ensureGlobalAnpmDir(): void {
+  if (!fs.existsSync(GLOBAL_ANPM_DIR)) {
+    fs.mkdirSync(GLOBAL_ANPM_DIR, { recursive: true })
   }
 }
 
@@ -45,12 +47,17 @@ function getProjectRoot(): string {
   return process.env.RELAY_PROJECT_PATH ?? process.cwd()
 }
 
-/** cwd/.relay/ — 프로젝트 로컬 (installed.json, agents/) */
-export function ensureProjectRelayDir(): void {
-  const dir = path.join(getProjectRoot(), '.relay')
+/** cwd/.anpm/ — 프로젝트 로컬 (installed.json, agents/) */
+export function ensureProjectAnpmDir(): void {
+  const dir = path.join(getProjectRoot(), '.anpm')
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
+}
+
+/** 프로젝트 로컬 .anpm/ 디렉토리 */
+export function getProjectAnpmDir(): string {
+  return path.join(getProjectRoot(), '.anpm')
 }
 
 export interface TokenData {
@@ -60,7 +67,7 @@ export interface TokenData {
 }
 
 export function loadTokenData(): TokenData | undefined {
-  const tokenFile = path.join(GLOBAL_RELAY_DIR, 'token')
+  const tokenFile = path.join(GLOBAL_ANPM_DIR, 'token')
   if (!fs.existsSync(tokenFile)) return undefined
   try {
     const raw = fs.readFileSync(tokenFile, 'utf-8').trim()
@@ -80,21 +87,21 @@ export function loadToken(): string | undefined {
 }
 
 export function saveTokenData(data: TokenData): void {
-  ensureGlobalRelayDir()
-  const tokenFile = path.join(GLOBAL_RELAY_DIR, 'token')
+  ensureGlobalAnpmDir()
+  const tokenFile = path.join(GLOBAL_ANPM_DIR, 'token')
   fs.writeFileSync(tokenFile, JSON.stringify(data), { mode: 0o600 })
   // writeFileSync mode only applies on creation — fix existing files
   fs.chmodSync(tokenFile, 0o600)
 }
 
 export function saveToken(token: string): void {
-  ensureGlobalRelayDir()
-  const tokenFile = path.join(GLOBAL_RELAY_DIR, 'token')
+  ensureGlobalAnpmDir()
+  const tokenFile = path.join(GLOBAL_ANPM_DIR, 'token')
   fs.writeFileSync(tokenFile, JSON.stringify({ access_token: token }), { mode: 0o600 })
   fs.chmodSync(tokenFile, 0o600)
 }
 
-const LOCK_FILE = path.join(GLOBAL_RELAY_DIR, '.token.lock')
+const LOCK_FILE = path.join(GLOBAL_ANPM_DIR, '.token.lock')
 const LOCK_TIMEOUT = 15000 // 15s
 
 /**
@@ -224,9 +231,9 @@ function normalizeInstalledRegistry(raw: InstalledRegistry): InstalledRegistry {
   return normalized
 }
 
-/** 프로젝트 로컬 installed.json 읽기 */
+/** 프로젝트 로컬 installed.json 읽기 (.anpm/ 우선, .relay/ 폴백) */
 export function loadInstalled(): InstalledRegistry {
-  const file = path.join(getProjectRoot(), '.relay', 'installed.json')
+  const file = path.join(getProjectAnpmDir(), 'installed.json')
   if (!fs.existsSync(file)) {
     return {}
   }
@@ -239,8 +246,8 @@ export function loadInstalled(): InstalledRegistry {
 
 /** 프로젝트 로컬 installed.json 쓰기 */
 export function saveInstalled(registry: InstalledRegistry): void {
-  ensureProjectRelayDir()
-  const file = path.join(getProjectRoot(), '.relay', 'installed.json')
+  ensureProjectAnpmDir()
+  const file = path.join(getProjectAnpmDir(), 'installed.json')
   fs.writeFileSync(file, JSON.stringify(registry, null, 2))
 }
 
@@ -248,7 +255,7 @@ export function saveInstalled(registry: InstalledRegistry): void {
 
 /** 글로벌 installed.json 읽기 (~/.relay/installed.json) */
 export function loadGlobalInstalled(): InstalledRegistry {
-  const file = path.join(GLOBAL_RELAY_DIR, 'installed.json')
+  const file = path.join(GLOBAL_ANPM_DIR, 'installed.json')
   if (!fs.existsSync(file)) return {}
   try {
     return normalizeInstalledRegistry(JSON.parse(fs.readFileSync(file, 'utf-8')) as InstalledRegistry)
@@ -259,8 +266,8 @@ export function loadGlobalInstalled(): InstalledRegistry {
 
 /** 글로벌 installed.json 쓰기 (~/.relay/installed.json) */
 export function saveGlobalInstalled(registry: InstalledRegistry): void {
-  ensureGlobalRelayDir()
-  const file = path.join(GLOBAL_RELAY_DIR, 'installed.json')
+  ensureGlobalAnpmDir()
+  const file = path.join(GLOBAL_ANPM_DIR, 'installed.json')
   fs.writeFileSync(file, JSON.stringify(registry, null, 2))
 }
 

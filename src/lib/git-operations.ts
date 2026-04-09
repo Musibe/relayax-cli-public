@@ -55,7 +55,7 @@ export function gitAdd(dir: string, files: string = '.'): void {
 
 export function gitCommit(dir: string, message: string): void {
   // Configure committer for the temp repo
-  execFileSync('git', ['config', 'user.email', 'relay@relayax.com'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'bot@anpm.io'], { cwd: dir, stdio: 'pipe' })
   execFileSync('git', ['config', 'user.name', 'Relay CLI'], { cwd: dir, stdio: 'pipe' })
   execFileSync('git', ['commit', '-m', message], { cwd: dir, stdio: 'pipe' })
 }
@@ -104,8 +104,8 @@ export function gitLatestTag(dir: string): string | null {
 
 /**
  * Build an authenticated git URL.
- * For public repos: https://git.relayax.com/@owner/agent.git
- * For gated/private: https://TOKEN:x@git.relayax.com/@owner/agent.git
+ * For public repos: https://git.anpm.io/@owner/agent.git
+ * For gated/private: https://TOKEN:x@git.anpm.io/@owner/agent.git
  */
 export function buildGitUrl(baseUrl: string, auth?: { token?: string; code?: string }): string {
   if (!auth?.token && !auth?.code) return baseUrl

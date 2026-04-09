@@ -82,7 +82,7 @@ export async function deploySymlinks(
         if (fs.existsSync(destPath) || isSymlink(destPath)) {
           if (isSymlink(destPath)) {
             const existingTarget = fs.readlinkSync(destPath)
-            if (!existingTarget.includes('.relay/agents/') || existingTarget.startsWith(agentDir)) {
+            if (!existingTarget.includes('.anpm/agents/') || existingTarget.startsWith(agentDir)) {
               // 같은 에이전트 또는 relay가 아닌 symlink → 조용히 교체
             } else {
               // 다른 에이전트의 symlink → 경고

@@ -10,7 +10,7 @@ import { isScopedSlug, parseSlug } from '../lib/slug.js'
 
 export function registerDeployRecord(program: Command): void {
   program
-    .command('deploy-record <slug>')
+    .command('deploy-record <slug>', { hidden: true })
     .description('에이전트가 배치한 파일 정보를 installed.json에 기록합니다')
     .requiredOption('--scope <scope>', '배치 범위 (global 또는 local)')
     .option('--files <paths...>', '배치된 파일 경로 목록')

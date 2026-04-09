@@ -8,8 +8,8 @@ CLI 명령 실행 후 JSON 에러가 반환되면 아래 기준에 따라 처리
 
 | 에러 코드 | 행동 |
 |-----------|------|
-| `LOGIN_REQUIRED` / `NO_TOKEN` | `relay login` 실행 (timeout 300초, 브라우저 자동 열림) → 성공 후 원래 명령 재시도 |
-| `NOT_INITIALIZED` | `relay init --all --json` 실행 → 원래 명령 재시도 |
+| `LOGIN_REQUIRED` / `NO_TOKEN` | `anpm login` 실행 (timeout 300초, 브라우저 자동 열림) → 성공 후 원래 명령 재시도 |
+| `NOT_INITIALIZED` | `anpm init --all --json` 실행 → 원래 명령 재시도 |
 | `FETCH_FAILED` | 3초 대기 후 원래 명령 재시도 (최대 2회). 2회 실패 시 사용자에게 안내 |
 
 #### 2. 사용자에게 선택지 제시 (사용자 질문 도구)

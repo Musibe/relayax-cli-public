@@ -1,7 +1,7 @@
 import http from 'http'
 import { Command } from 'commander'
 import { execSync } from 'child_process'
-import { ensureGlobalRelayDir, saveTokenData, API_URL } from '../lib/config.js'
+import { ensureGlobalAnpmDir, saveTokenData, API_URL } from '../lib/config.js'
 import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 
@@ -48,7 +48,7 @@ function collectBody(req: http.IncomingMessage): Promise<string> {
 }
 
 const SUCCESS_HTML = `<!DOCTYPE html>
-<html><head><title>RelayAX</title></head>
+<html><head><title>anpm</title></head>
 <body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f6f5f2;color:#111318">
 <div style="text-align:center">
 <h2>로그인 완료!</h2>
@@ -196,7 +196,7 @@ async function loginWithDevice(json: boolean): Promise<LoginResult> {
  * 브라우저에서 로그인 페이지를 열고 토큰을 받아 저장.
  */
 export async function runLogin(): Promise<void> {
-  ensureGlobalRelayDir()
+  ensureGlobalAnpmDir()
   const loginResult = await loginWithBrowser(false)
   await verifyToken(loginResult.token)
   saveTokenData({
@@ -210,13 +210,13 @@ export async function runLogin(): Promise<void> {
 export function registerLogin(program: Command): void {
   program
     .command('login')
-    .description('RelayAX 계정에 로그인합니다')
+    .description('anpm 계정에 로그인합니다')
     .option('--token <token>', '직접 토큰 입력 (브라우저 없이)')
     .option('--device', 'Device code 방식으로 로그인 (샌드박스/원격 환경용)')
     .action(async (opts: { token?: string; device?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
 
-      ensureGlobalRelayDir()
+      ensureGlobalAnpmDir()
       trackCommand('login')
 
       let accessToken = opts.token
@@ -235,11 +235,11 @@ export function registerLogin(program: Command): void {
           const msg = err instanceof Error ? err.message : '로그인 실패'
           reportCliError('login', 'LOGIN_FAILED', msg)
           if (json) {
-            console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: opts.device ? '다시 시도하세요.' : 'relay login --device를 시도하세요.' }))
+            console.error(JSON.stringify({ error: 'LOGIN_FAILED', message: msg, fix: opts.device ? '다시 시도하세요.' : 'anpm login --device를 시도하세요.' }))
           } else {
             console.error(`\x1b[31m오류: ${msg}\x1b[0m`)
             if (!opts.device) {
-              console.error(`\n\x1b[33m팁: 브라우저 콜백이 안 되는 환경이라면 relay login --device를 시도하세요.\x1b[0m`)
+              console.error(`\n\x1b[33m팁: 브라우저 콜백이 안 되는 환경이라면 anpm login --device를 시도하세요.\x1b[0m`)
             }
           }
           process.exit(1)

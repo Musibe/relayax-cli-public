@@ -1,5 +1,5 @@
-에이전트를 만들거나 업데이트하여 relay에 배포합니다.
-relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니다.
+에이전트를 만들거나 업데이트하여 anpm에 배포합니다.
+anpm.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니다.
 
 > 빌더는 터미널 환경에서 작업합니다. CLI 명령어를 직접 실행하세요.
 
@@ -14,32 +14,32 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 - Org가 1개 이상 있음 → "개인 배포 vs Org 배포?"
 - visibility 옵션이 2개 이상 → "공개 범위를 선택해주세요"
 - 포지셔닝 확인 → 분석 결과를 보여주고 "이대로 진행할까요?"
-- 배포 최종 확인 → relay.yaml 요약을 보여주고 "배포할까요?"
+- 배포 최종 확인 → anpm.yaml 요약을 보여주고 "배포할까요?"
 
 **질문 후 반드시 사용자의 답변을 받을 때까지 다음 단계로 넘어가지 마세요.**
 텍스트로 질문을 출력한 뒤 혼자 답변하고 진행하면 안 됩니다.
 
 ### 자동 진행하는 경우 (질문 불필요)
 - 소스가 1개뿐 → 해당 소스 자동 선택, 결과만 보여줌
-- 이미 relay.yaml이 있고 변경사항이 명확함 → 요약 후 진행
-- 로그인이 필요 → 자동으로 `relay login` 실행
+- 이미 anpm.yaml이 있고 변경사항이 명확함 → 요약 후 진행
+- 로그인이 필요 → 자동으로 `anpm login` 실행
 
 ## 분기: 최초 생성 vs 업데이트
 
-`.relay/relay.yaml`이 있는지 확인합니다.
+`.anpm/anpm.yaml`이 있는지 확인합니다.
 
 - **없음** → 아래 "최초 생성" 플로우
-- **있음** → `relay package --json`으로 상태 확인
-  - `no_contents` 에러 → relay.yaml에 sources/contents가 없는 레거시 상태. `relay package --init --json`으로 소스를 스캔하고 relay.yaml에 sources를 추가한 뒤 "업데이트" 플로우 진행
+- **있음** → `anpm package --json`으로 상태 확인
+  - `no_contents` 에러 → anpm.yaml에 sources/contents가 없는 레거시 상태. `anpm package --init --json`으로 소스를 스캔하고 anpm.yaml에 sources를 추가한 뒤 "업데이트" 플로우 진행
   - 정상 응답 → 아래 "업데이트" 플로우
 
 ---
 
-## 최초 생성 (relay.yaml 없음)
+## 최초 생성 (anpm.yaml 없음)
 
 ### 1. 콘텐츠 파악
 
-`relay package --init --json`으로 소스를 스캔합니다.
+`anpm package --init --json`으로 소스를 스캔합니다.
 
 - **소스가 2개 이상** → `sources[]`를 정리하여 보여주고, **사용자에게 질문하여 어떤 콘텐츠를 포함할지 물어봅니다.** 사용자가 답변할 때까지 다음 단계로 넘어가지 마세요.
 - **소스가 1개** → 해당 소스를 자동 선택하고 결과를 보여준 뒤 바로 진행합니다.
@@ -77,7 +77,7 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 - **npm**: import/require 패키지
 - **mcp**: MCP 서버 참조 (supabase, github 등)
 - **runtime**: Node.js/Python 최소 버전
-- **agents**: 의존하는 다른 relay 에이전트
+- **agents**: 의존하는 다른 anpm 에이전트
 
 보안 점검:
 - 하드코딩된 API 키, 토큰 (sk-*, ghp_*, AKIA* 등)
@@ -90,12 +90,12 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 
 ### 4. 배포 설정
 
-`relay orgs list --json`으로 Org 목록을 조회합니다.
+`anpm orgs list --json`으로 Org 목록을 조회합니다.
 
 **항상 사용자에게 질문합니다** (AskUserQuestion 등 사용자 입력 도구 사용):
 - **Org가 1개 이상** → "개인 배포 / {org이름}에 배포" 선택
 - **Org가 없음** → "개인 배포 / 새 Organization 만들기" 선택
-  - "새 Organization 만들기" 선택 시 → `relay orgs create "이름"` 실행 후 해당 Org에 배포
+  - "새 Organization 만들기" 선택 시 → `anpm orgs create "이름"` 실행 후 해당 Org에 배포
 
 선택에 따라 **사용자에게 질문하여 visibility를 물어봅니다:**
 - **Org 없이 배포**: `public`, `private` (2개)
@@ -104,9 +104,9 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 - `private` — 허가 코드 등록자만 사용 가능 (Org: 조직 내의 허가된 사용자만 사용 가능)
 - `internal` — 조직 내의 누구나 사용 가능 (Org 배포 시에만 선택 가능)
 
-### 5. relay.yaml 작성 & 배포
+### 5. anpm.yaml 작성 & 배포
 
-위 결과를 relay.yaml에 반영합니다:
+위 결과를 anpm.yaml에 반영합니다:
 - name, slug, description, version, tags
 - requires (판단 결과)
 - org, visibility
@@ -117,18 +117,18 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 **사용자에게 질문하여 최종 확인** 후 배포합니다.
 
 배포 명령어는 사용자의 선택에 따라 다릅니다:
-- **개인 배포**: `relay publish --no-org --json`
-- **Org 배포**: `relay publish --org {org_slug} --json`
+- **개인 배포**: `anpm publish --no-org --json`
+- **Org 배포**: `anpm publish --org {org_slug} --json`
 
-⚠️ `relay publish --json`만 실행하면 org 선택 에러가 발생합니다. 반드시 `--no-org` 또는 `--org`를 명시하세요.
+⚠️ `anpm publish --json`만 실행하면 org 선택 에러가 발생합니다. 반드시 `--no-org` 또는 `--org`를 명시하세요.
 
 ---
 
-## 업데이트 (relay.yaml 있음)
+## 업데이트 (anpm.yaml 있음)
 
 ### 1. 변경 사항 확인
 
-`relay package --json`으로 현재 상태를 확인합니다.
+`anpm package --json`으로 현재 상태를 확인합니다.
 - 변경된 콘텐츠 (modified)
 - 새로 추가된 콘텐츠 (new_items)
 
@@ -141,7 +141,7 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 ### 2. 필요한 부분만 업데이트
 
 사용자 요청에 따라:
-- **콘텐츠 추가**: 새 콘텐츠의 파일을 읽고 기능 파악 → relay.yaml의 contents에 추가
+- **콘텐츠 추가**: 새 콘텐츠의 파일을 읽고 기능 파악 → anpm.yaml의 contents에 추가
 - **requires 변경**: 콘텐츠를 다시 읽고 requires 재판단
 - **설명 개선**: 현재 포지셔닝을 분석하고 개선안 제안
 - **보안 재점검**: 시크릿/개인정보 확인
@@ -150,20 +150,20 @@ relay.yaml이 없으면 새로 만들고, 있으면 변경사항을 반영합니
 
 변경 요약을 보여주고 **사용자에게 질문하여 최종 확인** 후 배포합니다.
 
-배포 명령어는 사용자의 선택(또는 기존 relay.yaml 설정)에 따라:
-- **개인 배포**: `relay publish --no-org --json`
-- **Org 배포**: `relay publish --org {org_slug} --json`
+배포 명령어는 사용자의 선택(또는 기존 anpm.yaml 설정)에 따라:
+- **개인 배포**: `anpm publish --no-org --json`
+- **Org 배포**: `anpm publish --org {org_slug} --json`
 버전 범프가 필요하면 사용자에게 질문하여 patch/minor/major 중 확인합니다.
 
 ---
 
 ## 배포 완료 후 공유 안내
 
-`relay publish --json` 출력 결과를 파싱하여 다음을 보여주세요:
+`anpm publish --json` 출력 결과를 파싱하여 다음을 보여주세요:
 
 1. **배포 결과 요약** — slug, 버전, 공개 범위, URL
 2. **설치 방법** — CLI 출력에 코드블록 형태로 이미 포함되어 있으므로, 그 내용을 사용자에게 안내합니다:
-   - CLI: `npx relayax-cli install {slug}`
+   - CLI: `npx anpm install {slug}`
    - 에이전트 소개 페이지 URL
 3. **공유 텍스트** — CLI 출력의 공유 블록(┌─ ... ─┘)을 그대로 안내합니다. 팀에 바로 복붙할 수 있는 코드블록 형태입니다.
 

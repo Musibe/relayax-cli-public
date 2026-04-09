@@ -15,21 +15,218 @@ import { reportCliError } from '../lib/error-report.js'
 import { trackCommand } from '../lib/step-tracker.js'
 import { deploySymlinks, checkRequires, printRequiresCheck } from '../lib/installer.js'
 import { detectGlobalCLIs, AI_TOOLS, type AITool } from '../lib/ai-tools.js'
+import { parseInstallSource } from '../lib/install-source.js'
+import { installFromLocal } from '../lib/local-installer.js'
+import { installFromGit } from '../lib/git-installer.js'
+import { formatDetectedStructure } from '../lib/auto-detect.js'
+import { loadManifest, addAgentToManifest, satisfiesRange } from '../lib/manifest.js'
+import { updateLockEntry, loadLockfile } from '../lib/lockfile.js'
 
 export function registerInstall(program: Command): void {
   program
-    .command('install <slug>')
-    .description('에이전트 패키지를 .relay/agents/에 다운로드합니다')
-    .option('--code <code>', '접근 코드 (비공개/내부 에이전트 설치 시)')
-    .option('--global', '글로벌 설치 (홈 디렉토리)')
-    .option('--local', '로컬 설치 (프로젝트 디렉토리)')
-    .option('--project <dir>', '프로젝트 루트 경로 (기본: cwd, 환경변수: RELAY_PROJECT_PATH)')
-    .action(async (slugInput: string, _opts: { code?: string; global?: boolean; local?: boolean; project?: string }) => {
+    .command('install [slug]')
+    .description('Install an agent package to .anpm/agents/')
+    .option('--code <code>', 'Access code (for private/internal agents)')
+    .option('--global', 'Global install (home directory)')
+    .option('--local', 'Local install (project directory)')
+    .option('--project <dir>', 'Project root path (default: cwd, env: ANPM_PROJECT_PATH)')
+    .option('--path <subpath>', 'Subpath within a monorepo (for git installs)')
+    .option('--yes', 'Skip confirmation prompts')
+    .option('--save', 'Add agent to anpm.yaml agents')
+    .option('--prune', 'Remove agents not in anpm.yaml')
+    .action(async (slugInput: string | undefined, _opts: { code?: string; global?: boolean; local?: boolean; project?: string; path?: string; yes?: boolean; save?: boolean; prune?: boolean }) => {
       const json = (program.opts() as { json?: boolean }).json ?? false
       const projectPath = resolveProjectPath(_opts.project)
-      const tempDir = makeTempDir()
 
+      // ── Manifest mode (no args) ──
+      if (!slugInput) {
+        const { manifest, filePath: manifestPath } = loadManifest(projectPath)
+        if (!manifest?.agents || Object.keys(manifest.agents).length === 0) {
+          if (json) {
+            console.log(JSON.stringify({ error: 'NO_MANIFEST', message: 'No anpm.yaml with agents found.' }))
+          } else {
+            console.error('No anpm.yaml with agents found. Run `anpm install <slug>` to install an agent.')
+          }
+          process.exit(1)
+        }
+
+        const agents = manifest.agents
+        const _lock = loadLockfile(projectPath) // used in future for pinned versions
+        const localInstalled = loadInstalled()
+        let installed = 0
+        let skipped = 0
+
+        if (!json) console.error(`\x1b[2mInstalling from ${manifestPath}...\x1b[0m`)
+
+        for (const [slug, range] of Object.entries(agents)) {
+          // Check if already installed with compatible version
+          const existing = localInstalled[slug]
+          if (existing && satisfiesRange(existing.version, range)) {
+            skipped++
+            continue
+          }
+
+          try {
+            const source = parseInstallSource(slug)
+            if (source.type === 'local') {
+              installFromLocal(source.absolutePath, { scope: 'local', projectPath })
+            } else if (source.type === 'git') {
+              installFromGit(source, { scope: 'local', projectPath })
+            } else {
+              // Registry install — reuse the existing flow by recursing
+              // For now, use a simplified approach: call the single-agent install logic
+              if (!json) console.error(`  Installing ${slug}...`)
+              // We'll let the user run `anpm install <slug>` for registry agents
+              // Full manifest registry install requires the same token/fetch flow
+              if (!json) console.error(`  \x1b[33m⚠ Registry agent ${slug} — run: anpm install ${slug} --save\x1b[0m`)
+              continue
+            }
+
+            // Update lock
+            updateLockEntry(projectPath, slug, {
+              version: existing?.version ?? '0.0.0',
+              resolved: source.type === 'local' ? `local:${(source as { absolutePath: string }).absolutePath}` : `git:${slug}`,
+            })
+
+            installed++
+            if (!json) console.error(`  \x1b[32m✓\x1b[0m ${slug}`)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            if (!json) console.error(`  \x1b[31m✖\x1b[0m ${slug}: ${msg}`)
+          }
+        }
+
+        if (json) {
+          console.log(JSON.stringify({ status: 'ok', installed, skipped, total: Object.keys(agents).length }))
+        } else {
+          console.log(`\n\x1b[32m✓\x1b[0m Manifest install complete: ${installed} installed, ${skipped} skipped`)
+        }
+        return
+      }
       trackCommand('install', { slug: slugInput })
+
+      // ── Source type branching ──
+      const source = parseInstallSource(slugInput)
+
+      if (source.type === 'local' || source.type === 'git') {
+        try {
+          const interactive = Boolean(process.stdin.isTTY) && !json
+          const scope: 'global' | 'local' = _opts.global ? 'global' : 'local'
+
+          let agentDir: string
+          let installSlug: string
+          let sourceTag: string
+
+          if (source.type === 'local') {
+            if (!json) console.error(`\x1b[2mInstalling from local path: ${source.absolutePath}\x1b[0m`)
+            const result = installFromLocal(source.absolutePath, { scope, projectPath })
+
+            // Confirm auto-detected structure if no relay.yaml
+            if (result.detected.method !== 'relay-yaml' && interactive && !_opts.yes) {
+              console.error(`\n  Detected structure (${result.detected.method}):`)
+              console.error(formatDetectedStructure(result.detected))
+              const { confirm } = await import('@inquirer/prompts')
+              const ok = await confirm({ message: 'Install these?', default: true })
+              if (!ok) { process.exit(0) }
+            }
+
+            agentDir = result.agentDir
+            installSlug = `local/${result.name}`
+            sourceTag = `local:${source.absolutePath}`
+          } else {
+            if (!json) console.error(`\x1b[2mInstalling from git: ${source.url}${source.ref ? `#${source.ref}` : ''}\x1b[0m`)
+            const result = installFromGit(source, { scope, projectPath, subpath: _opts.path })
+
+            if (result.detected.method !== 'relay-yaml' && interactive && !_opts.yes) {
+              console.error(`\n  Detected structure (${result.detected.method}):`)
+              console.error(formatDetectedStructure(result.detected))
+              const { confirm } = await import('@inquirer/prompts')
+              const ok = await confirm({ message: 'Install these?', default: true })
+              if (!ok) { process.exit(0) }
+            }
+
+            agentDir = result.agentDir
+            installSlug = result.slug
+            sourceTag = `git:${source.host}:${source.user}/${source.repo}${source.ref ? `#${source.ref}` : ''}`
+          }
+
+          // Deploy symlinks to detected harnesses
+          const deploy = await deploySymlinks(agentDir, scope, projectPath)
+          for (const w of deploy.warnings) {
+            if (!json) console.error(`\x1b[33m${w}\x1b[0m`)
+          }
+
+          // Record in installed.json
+          const installRecord = {
+            version: '0.0.0',
+            installed_at: new Date().toISOString(),
+            files: [agentDir],
+            deploy_scope: scope,
+            deployed_symlinks: deploy.symlinks,
+            source: sourceTag,
+          }
+          if (scope === 'global') {
+            const globalInstalled = loadGlobalInstalled()
+            globalInstalled[installSlug] = installRecord
+            saveGlobalInstalled(globalInstalled)
+          } else {
+            const installed = loadInstalled()
+            installed[installSlug] = installRecord
+            saveInstalled(installed)
+          }
+
+          // Count files
+          function countFilesInDir(dir: string): number {
+            let count = 0
+            if (!fs.existsSync(dir)) return 0
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (entry.isDirectory()) count += countFilesInDir(path.join(dir, entry.name))
+              else count++
+            }
+            return count
+          }
+
+          const fileCount = countFilesInDir(agentDir)
+          const scopeLabel = scope === 'global' ? 'global' : 'local'
+
+          if (json) {
+            console.log(JSON.stringify({
+              status: 'ok',
+              slug: installSlug,
+              source: sourceTag,
+              files: fileCount,
+              install_path: agentDir,
+              scope,
+              symlinks: deploy.symlinks,
+            }))
+          } else {
+            console.log(`\n\x1b[32m✓ Installed ${installSlug}\x1b[0m`)
+            console.log(`  path: \x1b[36m${agentDir}\x1b[0m`)
+            console.log(`  scope: ${scopeLabel}`)
+            console.log(`  files: ${fileCount}, symlinks: ${deploy.symlinks.length}`)
+          }
+
+          // --save: add to relay.yaml
+          if (_opts.save) {
+            addAgentToManifest(projectPath, installSlug, '*')
+            if (!json) console.log(`  \x1b[32m✓\x1b[0m Added to anpm.yaml`)
+          }
+
+          return
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          reportCliError('install', 'INSTALL_FAILED', message)
+          if (json) {
+            console.error(JSON.stringify({ error: 'INSTALL_FAILED', message }))
+          } else {
+            console.error(`\x1b[31m✖ ${message}\x1b[0m`)
+          }
+          process.exit(1)
+        }
+      }
+
+      // ── Registry install flow (existing) ──
+      const tempDir = makeTempDir()
 
       try {
         // Resolve scoped slug and fetch agent metadata
@@ -70,11 +267,11 @@ export function registerInstall(program: Command): void {
               console.error(JSON.stringify({
                 error: 'LOGIN_REQUIRED',
                 slug,
-                message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
-                fix: 'relay login 실행 후 재시도하세요.',
+                message: '이 에이전트는 로그인이 필요합니다. anpm login을 먼저 실행하세요.',
+                fix: 'anpm login 실행 후 재시도하세요.',
               }))
             } else {
-              console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
+              console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. anpm login 을 먼저 실행하세요.\x1b[0m')
             }
             process.exit(1)
           }
@@ -109,11 +306,11 @@ export function registerInstall(program: Command): void {
                   console.error(JSON.stringify({
                     error: 'LOGIN_REQUIRED',
                     slug,
-                    message: '이 에이전트는 로그인이 필요합니다. relay login을 먼저 실행하세요.',
-                    fix: 'relay login 실행 후 재시도하세요.',
+                    message: '이 에이전트는 로그인이 필요합니다. anpm login을 먼저 실행하세요.',
+                    fix: 'anpm login 실행 후 재시도하세요.',
                   }))
                 } else {
-                  console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
+                  console.error('\x1b[31m이 에이전트는 로그인이 필요합니다. anpm login 을 먼저 실행하세요.\x1b[0m')
                 }
                 process.exit(1)
               }
@@ -135,14 +332,14 @@ export function registerInstall(program: Command): void {
             }
             // No code provided: show appropriate error messages
             else if (errorVisibility === 'private' || purchaseInfo) {
-              // Private agent: show purchase info + relay access hint
+              // Private agent: show purchase info + access hint
               if (json) {
                 console.error(JSON.stringify({
                   error: 'ACCESS_REQUIRED',
                   message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
                   purchase_info: purchaseInfo ?? null,
-                  fix: '접근 링크 코드가 있으면: relay install ' + slugInput + ' --code <코드>',
+                  fix: '접근 링크 코드가 있으면: anpm install ' + slugInput + ' --code <코드>',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
@@ -152,7 +349,7 @@ export function registerInstall(program: Command): void {
                 if (purchaseInfo?.url) {
                   console.error(`  \x1b[36m${purchaseInfo.url}\x1b[0m`)
                 }
-                console.error(`\n\x1b[33m접근 링크 코드가 있으면: relay install ${slugInput} --code <코드>\x1b[0m`)
+                console.error(`\n\x1b[33m접근 링크 코드가 있으면: anpm install ${slugInput} --code <코드>\x1b[0m`)
               }
               process.exit(1)
             } else if (membershipStatus === 'member') {
@@ -162,7 +359,7 @@ export function registerInstall(program: Command): void {
                   error: 'NO_ACCESS',
                   message: '이 에이전트에 대한 접근 권한이 없습니다.',
                   slug,
-                  fix: '이 에이전트의 접근 링크 코드가 있으면 `relay install ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 에이전트 제작자에게 문의하세요.',
+                  fix: '이 에이전트의 접근 링크 코드가 있으면 `anpm install ' + slugInput + ' --code <코드>`로 접근 권한을 얻으세요. 없으면 에이전트 제작자에게 문의하세요.',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트에 대한 접근 권한이 없습니다.\x1b[0m')
@@ -174,11 +371,11 @@ export function registerInstall(program: Command): void {
                   error: 'ACCESS_REQUIRED',
                   message: '이 에이전트는 접근 권한이 필요합니다.',
                   slug,
-                  fix: '접근 코드가 있으면 `relay install ' + slugInput + ' --code <코드>`로 설치하세요.',
+                  fix: '접근 코드가 있으면 `anpm install ' + slugInput + ' --code <코드>`로 설치하세요.',
                 }))
               } else {
                 console.error('\x1b[31m이 에이전트는 접근 권한이 필요합니다.\x1b[0m')
-                console.error('\x1b[33m접근 코드가 있으면 `relay install ' + slugInput + ' --code <코드>`로 설치하세요.\x1b[0m')
+                console.error('\x1b[33m접근 코드가 있으면 `anpm install ' + slugInput + ' --code <코드>`로 설치하세요.\x1b[0m')
               }
               process.exit(1)
             }
@@ -238,8 +435,8 @@ export function registerInstall(program: Command): void {
           scope = await select<'global' | 'local'>({
             message: `설치 범위를 선택하세요 (제작자 권장: ${recommendLabel})`,
             choices: [
-              { name: '글로벌 (~/.relay/agents/) — 모든 프로젝트에서 사용', value: 'global' },
-              { name: '로컬 (./.relay/agents/) — 이 프로젝트에서만 사용', value: 'local' },
+              { name: '글로벌 (~/.anpm/agents/) — 모든 프로젝트에서 사용', value: 'global' },
+              { name: '로컬 (./.anpm/agents/) — 이 프로젝트에서만 사용', value: 'local' },
             ],
             default: defaultScope,
           })
@@ -248,23 +445,27 @@ export function registerInstall(program: Command): void {
         }
 
         const agentDir = scope === 'global'
-          ? path.join(os.homedir(), '.relay', 'agents', parsed.owner, parsed.name)
-          : path.join(projectPath, '.relay', 'agents', parsed.owner, parsed.name)
+          ? path.join(os.homedir(), '.anpm', 'agents', parsed.owner, parsed.name)
+          : path.join(projectPath, '.anpm', 'agents', parsed.owner, parsed.name)
 
-        // 2. 로그인 필수 (git clone에 relay token 필요)
-        const token = await ensureToken()
-        if (!token) {
-          if (json) {
-            console.error(JSON.stringify({
-              error: 'LOGIN_REQUIRED',
-              slug,
-              message: '로그인이 필요합니다. relay login을 먼저 실행하세요.',
-              fix: 'relay login 실행 후 재시도하세요.',
-            }))
-          } else {
-            console.error('\x1b[31m로그인이 필요합니다. relay login 을 먼저 실행하세요.\x1b[0m')
+        // 2. 인증: public이면 token 불필요, private/internal이면 로그인 필수
+        const isPublic = resolvedAgent.visibility === 'public' || !resolvedAgent.visibility
+        let token: string | null = null
+        if (!isPublic) {
+          token = await ensureToken()
+          if (!token) {
+            if (json) {
+              console.error(JSON.stringify({
+                error: 'LOGIN_REQUIRED',
+                slug,
+                message: '로그인이 필요합니다. anpm login을 먼저 실행하세요.',
+                fix: 'anpm login 실행 후 재시도하세요.',
+              }))
+            } else {
+              console.error('\x1b[31m로그인이 필요합니다. anpm login 을 먼저 실행하세요.\x1b[0m')
+            }
+            process.exit(1)
           }
-          process.exit(1)
         }
 
         // 3. Download package via git clone
@@ -280,7 +481,7 @@ export function registerInstall(program: Command): void {
         }
 
         checkGitInstalled()
-        const gitUrl = buildGitUrl(resolvedAgent.git_url, { token })
+        const gitUrl = buildGitUrl(resolvedAgent.git_url, token ? { token } : undefined)
         await clonePackage(gitUrl, agentDir, requestedVersion)
 
         // Verify clone has actual files (not just .git)
@@ -404,6 +605,14 @@ export function registerInstall(program: Command): void {
               : 'Claude Code'
             console.log(`\n  \x1b[36m👉 설정이 필요합니다.\x1b[0m`)
             console.log(`  \x1b[36m   ${toolNames}를 열고 \x1b[1m/${setupCmd.name}\x1b[0m\x1b[36m 을 입력하세요\x1b[0m`)
+          }
+
+          // Cloud deploy hint
+          const cloudConfig = (resolvedAgent as unknown as Record<string, unknown>).cloud_config
+          if (cloudConfig) {
+            const providers = (cloudConfig as Record<string, unknown>).supported_providers as string[] | undefined
+            const providerStr = providers?.join(', ') ?? 'anthropic'
+            console.log(`\n  ☁️  Cloud deploy available. Run: \x1b[36manpm deploy ${slugInput} --to ${providerStr}\x1b[0m`)
           }
         }
       } catch (err) {

@@ -17,7 +17,7 @@ export async function checkCliVersion(force?: boolean): Promise<UpdateResult | n
   if (isCacheValid('cli', force)) return null
 
   try {
-    const res = await fetch('https://registry.npmjs.org/relayax-cli/latest', {
+    const res = await fetch('https://registry.npmjs.org/anpm-io/latest', {
       signal: AbortSignal.timeout(3000),
     })
     if (!res.ok) return null
